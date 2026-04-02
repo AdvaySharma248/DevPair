@@ -13,7 +13,7 @@ import {
   type AuthError,
 } from 'firebase/auth';
 import type { User, UserRole } from '@/store/mentorship-store';
-import { getFirebaseAuth } from './firebase';
+import { getFirebaseAuth, waitForFirebaseAuthState } from './firebase';
 
 interface FirebaseSessionApiResponse {
   user?: User;
@@ -192,8 +192,7 @@ export async function signupWithFirebase({
 }
 
 export async function restoreBackendSessionFromFirebase() {
-  const auth = getFirebaseAuth();
-  const firebaseUser = auth.currentUser;
+  const firebaseUser = await waitForFirebaseAuthState();
 
   if (!firebaseUser) {
     return null;

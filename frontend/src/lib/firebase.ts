@@ -1,7 +1,9 @@
 'use client';
 
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, type User } from 'firebase/auth';
+
+let authStateReadyPromise: Promise<void> | null = null;
 
 function getRequiredEnvValue(key: string, value: string | undefined) {
   if (!value) {
@@ -43,4 +45,41 @@ export function getFirebaseApp() {
 
 export function getFirebaseAuth() {
   return getAuth(getFirebaseApp());
+}
+
+export async function waitForFirebaseAuthState(timeoutMs = 4_000) {
+  const auth = getFirebaseAuth();
+
+  if (auth.currentUser || typeof window === 'undefined') {
+    return auth.currentUser;
+  }
+
+  if (!authStateReadyPromise) {
+    authStateReadyPromise = new Promise((resolve) => {
+      let finished = false;
+      let unsubscribe: (() => void) | null = null;
+
+      const finish = () => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+        window.clearTimeout(timeoutId);
+        unsubscribe?.();
+        authStateReadyPromise = null;
+        resolve();
+      };
+
+      const timeoutId = window.setTimeout(finish, timeoutMs);
+      unsubscribe = onAuthStateChanged(
+        auth,
+        () => finish(),
+        () => finish(),
+      );
+    });
+  }
+
+  await authStateReadyPromise;
+  return auth.currentUser as User | null;
 }

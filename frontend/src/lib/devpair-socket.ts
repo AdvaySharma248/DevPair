@@ -1,7 +1,7 @@
 'use client';
 
 import { io, type Socket } from 'socket.io-client';
-import { getFirebaseAuth } from './firebase';
+import { waitForFirebaseAuthState } from './firebase';
 
 interface ApiMessagePayload {
   id: string;
@@ -107,6 +107,9 @@ interface ServerToClientEvents {
 type DevPairClientSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 let socketInstance: DevPairClientSocket | null = null;
+let socketConnectionPromise: Promise<DevPairClientSocket> | null = null;
+
+const SOCKET_CONNECTION_TIMEOUT_MS = 10_000;
 
 function getSocketServerUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
@@ -114,8 +117,7 @@ function getSocketServerUrl() {
 
 async function getSocketAuthPayload() {
   try {
-    const auth = getFirebaseAuth();
-    const firebaseUser = auth.currentUser;
+    const firebaseUser = await waitForFirebaseAuthState();
 
     if (!firebaseUser) {
       return {};
@@ -127,6 +129,46 @@ async function getSocketAuthPayload() {
     console.error('Failed to prepare realtime socket auth:', error);
     return {};
   }
+}
+
+function ensureSocketConnection(socket: DevPairClientSocket) {
+  if (socket.connected) {
+    return Promise.resolve(socket);
+  }
+
+  if (socketConnectionPromise) {
+    return socketConnectionPromise;
+  }
+
+  socketConnectionPromise = new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timed out connecting to realtime server'));
+    }, SOCKET_CONNECTION_TIMEOUT_MS);
+
+    const handleConnect = () => {
+      cleanup();
+      resolve(socket);
+    };
+
+    const handleConnectError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      socket.off('connect', handleConnect);
+      socket.off('connect_error', handleConnectError);
+      socketConnectionPromise = null;
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('connect_error', handleConnectError);
+    socket.connect();
+  });
+
+  return socketConnectionPromise;
 }
 
 export function getDevPairSocket() {
@@ -162,24 +204,30 @@ export function connectDevPairSocket() {
   }
 
   if (!socket.connected) {
-    socket.connect();
+    void ensureSocketConnection(socket).catch((error) => {
+      console.error('Realtime socket connection setup failed:', error);
+    });
   }
 
   return socket;
 }
 
 export function disconnectDevPairSocket() {
+  socketConnectionPromise = null;
+
   if (socketInstance?.connected) {
     socketInstance.disconnect();
   }
 }
 
-export function joinRealtimeSession(sessionId: string) {
-  const socket = connectDevPairSocket();
+export async function joinRealtimeSession(sessionId: string) {
+  const initialSocket = connectDevPairSocket();
 
-  if (!socket) {
+  if (!initialSocket) {
     return Promise.reject(new Error('Realtime socket unavailable'));
   }
+
+  const socket = await ensureSocketConnection(initialSocket);
 
   return new Promise<JoinSessionAck>((resolve, reject) => {
     socket.emit('join-session', { sessionId }, (response) => {
@@ -194,22 +242,24 @@ export function joinRealtimeSession(sessionId: string) {
 }
 
 export function sendRealtimeMessage(sessionId: string, content: string) {
-  const socket = connectDevPairSocket();
+  const initialSocket = connectDevPairSocket();
 
-  if (!socket) {
+  if (!initialSocket) {
     return Promise.reject(new Error('Realtime socket unavailable'));
   }
 
-  return new Promise<SendMessageAck>((resolve, reject) => {
-    socket.emit('send-message', { sessionId, content }, (response) => {
-      if (response?.error) {
-        reject(new Error(response.error));
-        return;
-      }
+  return ensureSocketConnection(initialSocket).then((socket) =>
+    new Promise<SendMessageAck>((resolve, reject) => {
+      socket.emit('send-message', { sessionId, content }, (response) => {
+        if (response?.error) {
+          reject(new Error(response.error));
+          return;
+        }
 
-      resolve(response);
-    });
-  });
+        resolve(response);
+      });
+    }),
+  );
 }
 
 export function emitRealtimeCodeChange(sessionId: string, code: string, language: string) {

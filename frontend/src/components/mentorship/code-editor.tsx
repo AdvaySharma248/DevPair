@@ -143,7 +143,7 @@ function OutputPanel() {
   return (
     <div 
       className={cn(
-        "border-t border-border bg-[#171514] transition-all duration-200",
+        "border-t border-border bg-[#111111] transition-all duration-200",
         outputPanelOpen ? "" : "h-8"
       )}
       style={{ height: outputPanelOpen ? outputHeight : 32 }}
@@ -164,12 +164,12 @@ function OutputPanel() {
           />
         )}
 
-        <div className="flex items-center justify-between border-b border-border bg-[#23201e] px-3 h-8">
+        <div className="flex items-center justify-between border-b border-border bg-[#1a1a1a] px-3 h-8">
           <div className="flex items-center gap-2">
             {getStatusIcon()}
             <span className="text-[11px] font-medium text-foreground">Console</span>
             {outputPanelOpen && (
-              <TabsList className="h-6 rounded-md bg-[#171514] p-0.5">
+              <TabsList className="h-6 rounded-md bg-[#111111] p-0.5">
                 <TabsTrigger value="input" className="h-5 px-2 text-[10px]">
                   Input
                 </TabsTrigger>
@@ -250,7 +250,7 @@ function OutputPanel() {
             suppressHydrationWarning
           >
             <TabsContent value="input" className="mt-0 h-full">
-              <div className="flex h-full flex-col gap-2 bg-[#201c19] p-3">
+              <div className="flex h-full flex-col gap-2 bg-[#1b1b1b] p-3">
                 <div className="space-y-1">
                   <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Custom Input
@@ -263,7 +263,7 @@ function OutputPanel() {
                   value={stdin}
                   onChange={(event) => setStdin(event.target.value)}
                   placeholder={'Example:\n4\n2 7 11 15\n9'}
-                  className="h-full min-h-0 flex-1 resize-none border-border bg-[#171514] px-3 py-2 text-[12px] text-[#f3ede4] placeholder:text-muted-foreground/70 focus-visible:ring-1"
+                  className="h-full min-h-0 flex-1 resize-none border-border bg-[#111111] px-3 py-2 text-[#f5f5f5] text-[12px] placeholder:text-muted-foreground/70 focus-visible:ring-1"
                 />
               </div>
             </TabsContent>
@@ -382,37 +382,37 @@ export function CodeEditor() {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '9f9486', fontStyle: 'italic' },
+        { token: 'comment', foreground: '8f8f8f', fontStyle: 'italic' },
         { token: 'keyword', foreground: 'f5a623' },
-        { token: 'string', foreground: 'e7c88b' },
-        { token: 'number', foreground: 'f0b86d' },
-        { token: 'type', foreground: 'f3b34d' },
-        { token: 'function', foreground: 'f7d39a' },
-        { token: 'variable', foreground: 'f3ede4' },
-        { token: 'constant', foreground: 'f0b86d' },
+        { token: 'string', foreground: 'd7ba7d' },
+        { token: 'number', foreground: 'b5cea8' },
+        { token: 'type', foreground: 'f0c56b' },
+        { token: 'function', foreground: 'e5e5e5' },
+        { token: 'variable', foreground: 'f5f5f5' },
+        { token: 'constant', foreground: 'b5cea8' },
       ],
       colors: {
-        'editor.background': '#171514',
-        'editor.foreground': '#f3ede4',
-        'editor.lineHighlightBackground': '#211d1a',
-        'editor.selectionBackground': '#4b392680',
-        'editor.inactiveSelectionBackground': '#4b392640',
-        'editorLineNumber.foreground': '#62574d',
-        'editorLineNumber.activeForeground': '#b9ac9c',
+        'editor.background': '#111111',
+        'editor.foreground': '#f5f5f5',
+        'editor.lineHighlightBackground': '#181818',
+        'editor.selectionBackground': '#3a3a3a80',
+        'editor.inactiveSelectionBackground': '#33333355',
+        'editorLineNumber.foreground': '#5f5f5f',
+        'editorLineNumber.activeForeground': '#b9b9b9',
         'editorCursor.foreground': '#f5a623',
-        'editor.selectionHighlightBackground': '#f5a62320',
-        'editorIndentGuide.background': '#2c2825',
-        'editorIndentGuide.activeBackground': '#3a332d',
-        'editorWhitespace.foreground': '#3a332d',
+        'editor.selectionHighlightBackground': '#f5a62318',
+        'editorIndentGuide.background': '#242424',
+        'editorIndentGuide.activeBackground': '#353535',
+        'editorWhitespace.foreground': '#303030',
         'editorBracketMatch.background': '#f5a62318',
         'editorBracketMatch.border': '#f5a623',
         // Minimap
-        'minimap.background': '#171514',
-        'minimap.selectionHighlight': '#4b392680',
+        'minimap.background': '#111111',
+        'minimap.selectionHighlight': '#3a3a3a80',
         // Scrollbar
-        'scrollbarSlider.background': '#5b4e4233',
-        'scrollbarSlider.hoverBackground': '#6a5a4d55',
-        'scrollbarSlider.activeBackground': '#78675777',
+        'scrollbarSlider.background': '#56565633',
+        'scrollbarSlider.hoverBackground': '#6a6a6a55',
+        'scrollbarSlider.activeBackground': '#80808077',
       },
     });
 

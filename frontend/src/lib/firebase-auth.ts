@@ -15,9 +15,10 @@ import {
 import type { User, UserRole } from '@/store/mentorship-store';
 import { getFirebaseAuth } from './firebase';
 
-interface FirebaseSessionResponse {
+interface FirebaseSessionApiResponse {
   user?: User;
   requiresEmailVerification?: boolean;
+  error?: string;
 }
 
 interface SignupOptions {
@@ -90,7 +91,7 @@ async function exchangeFirebaseTokenForSession(input: {
     body: JSON.stringify(input),
   });
 
-  const data = (await response.json().catch(() => null)) as FirebaseSessionResponse | { error?: string } | null;
+  const data = (await response.json().catch(() => null)) as FirebaseSessionApiResponse | null;
 
   if (!response.ok) {
     throw new Error(data?.error || 'Failed to create backend session');

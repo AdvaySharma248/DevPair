@@ -69,6 +69,22 @@ function buildRemoteStream(event: RTCTrackEvent, existingStream: MediaStream | n
   return nextStream;
 }
 
+function mergeStreams(existingStream: MediaStream | null, extraStream: MediaStream) {
+  const nextStream = new MediaStream();
+
+  existingStream?.getTracks().forEach((track) => {
+    if (track.readyState === 'live') {
+      nextStream.addTrack(track);
+    }
+  });
+
+  extraStream.getTracks().forEach((track) => {
+    nextStream.addTrack(track);
+  });
+
+  return nextStream;
+}
+
 function toSessionDescriptionInit(
   description: SignalSessionDescription,
 ): RTCSessionDescriptionInit | null {
@@ -326,9 +342,8 @@ export function useSessionWebRtc(): SessionWebRtcState {
             video: includeVideo && !hasLiveVideoTrack,
           });
 
-          extraStream.getTracks().forEach((track) => {
-            stream?.addTrack(track);
-          });
+          stream = mergeStreams(stream, extraStream);
+          localStreamRef.current = stream;
         }
       }
 
@@ -355,12 +370,12 @@ export function useSessionWebRtc(): SessionWebRtcState {
       return;
     }
 
-    if (audioSenderRef.current) {
-      await audioSenderRef.current.replaceTrack(null);
+    audioTrack.enabled = false;
+
+    if (audioSenderRef.current && audioSenderRef.current.track !== audioTrack) {
+      await audioSenderRef.current.replaceTrack(audioTrack);
     }
 
-    stream.removeTrack(audioTrack);
-    audioTrack.stop();
     attachLocalStream();
   }, [attachLocalStream]);
 
@@ -380,12 +395,12 @@ export function useSessionWebRtc(): SessionWebRtcState {
       return;
     }
 
-    if (videoSenderRef.current) {
-      await videoSenderRef.current.replaceTrack(null);
+    videoTrack.enabled = false;
+
+    if (videoSenderRef.current && videoSenderRef.current.track !== videoTrack) {
+      await videoSenderRef.current.replaceTrack(videoTrack);
     }
 
-    stream.removeTrack(videoTrack);
-    videoTrack.stop();
     setHasLocalStream(false);
     attachLocalStream();
   }, [attachLocalStream]);
@@ -446,6 +461,8 @@ export function useSessionWebRtc(): SessionWebRtcState {
       return;
     }
 
+    liveAudioTrack.enabled = true;
+
     const peerConnection = peerConnectionRef.current;
 
     if (peerConnection) {
@@ -488,6 +505,8 @@ export function useSessionWebRtc(): SessionWebRtcState {
     if (!liveVideoTrack) {
       return;
     }
+
+    liveVideoTrack.enabled = true;
 
     const peerConnection = peerConnectionRef.current;
 

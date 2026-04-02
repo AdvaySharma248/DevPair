@@ -277,25 +277,25 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '8b949e', fontStyle: 'italic' },
-        { token: 'keyword', foreground: 'ffa116' },
-        { token: 'string', foreground: 'a5d6ff' },
-        { token: 'number', foreground: '79c0ff' },
-        { token: 'type', foreground: 'ffa116' },
-        { token: 'function', foreground: 'd2a8ff' },
-        { token: 'variable', foreground: 'e6edf3' },
-        { token: 'constant', foreground: '79c0ff' },
+        { token: 'comment', foreground: '9f9486', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'f5a623' },
+        { token: 'string', foreground: 'e7c88b' },
+        { token: 'number', foreground: 'f0b86d' },
+        { token: 'type', foreground: 'f3b34d' },
+        { token: 'function', foreground: 'f7d39a' },
+        { token: 'variable', foreground: 'f3ede4' },
+        { token: 'constant', foreground: 'f0b86d' },
       ],
       colors: {
-        'editor.background': '#0d1117',
-        'editor.foreground': '#e6edf3',
-        'editor.lineHighlightBackground': '#161b22',
-        'editor.selectionBackground': '#264f78',
-        'editorLineNumber.foreground': '#484f58',
-        'editorLineNumber.activeForeground': '#8b949e',
-        'editorCursor.foreground': '#ffa116',
-        'editorIndentGuide.background': '#21262d',
-        'editorIndentGuide.activeBackground': '#30363d',
+        'editor.background': '#171514',
+        'editor.foreground': '#f3ede4',
+        'editor.lineHighlightBackground': '#211d1a',
+        'editor.selectionBackground': '#4b392680',
+        'editorLineNumber.foreground': '#62574d',
+        'editorLineNumber.activeForeground': '#b9ac9c',
+        'editorCursor.foreground': '#f5a623',
+        'editorIndentGuide.background': '#2c2825',
+        'editorIndentGuide.activeBackground': '#3a332d',
       },
     });
 
@@ -387,9 +387,9 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
                 <TooltipTrigger asChild>
                   <button
                     onClick={onClose}
-                    className="w-3 h-3 rounded-full bg-[#f85149] hover:bg-[#ff6b6b] transition-colors flex items-center justify-center group"
+                    className="w-3 h-3 rounded-full bg-[#df5c45] hover:bg-[#e36f5d] transition-colors flex items-center justify-center group"
                   >
-                    <X className="w-1.5 h-1.5 text-[#0d1117] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <X className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -401,8 +401,8 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button className="w-3 h-3 rounded-full bg-[#d29922] hover:bg-[#f0b429] transition-colors flex items-center justify-center">
-                    <GripHorizontal className="w-1.5 h-1.5 text-[#0d1117] opacity-0 hover:opacity-100 transition-opacity" />
+                  <button className="w-3 h-3 rounded-full bg-[#d2902f] hover:bg-[#df9e44] transition-colors flex items-center justify-center">
+                    <GripHorizontal className="w-1.5 h-1.5 text-[#1b1610] opacity-0 hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -416,9 +416,9 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
                 <TooltipTrigger asChild>
                   <button
                     onClick={onExpand}
-                    className="w-3 h-3 rounded-full bg-[#3fb950] hover:bg-[#4ade80] transition-colors flex items-center justify-center group"
+                    className="w-3 h-3 rounded-full bg-[#f0c56b] hover:bg-[#f4cf83] transition-colors flex items-center justify-center group"
                   >
-                    <Maximize2 className="w-1.5 h-1.5 text-[#0d1117] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Maximize2 className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">

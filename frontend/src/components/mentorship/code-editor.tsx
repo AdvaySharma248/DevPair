@@ -127,7 +127,7 @@ function OutputPanel() {
       return <Terminal className="w-3 h-3 text-muted-foreground" />;
     }
     if (executionResult.statusCode === 3 || executionResult.status === 'Accepted') {
-      return <CheckCircle className="w-3 h-3 text-green-500" />;
+      return <CheckCircle className="w-3 h-3 text-[#24b39b]" />;
     }
     return <AlertCircle className="w-3 h-3 text-red-500" />;
   };
@@ -135,7 +135,7 @@ function OutputPanel() {
   const getStatusColor = () => {
     if (!executionResult) return 'text-muted-foreground';
     if (executionResult.statusCode === 3 || executionResult.status === 'Accepted') {
-      return 'text-green-500';
+      return 'text-[#24b39b]';
     }
     return 'text-red-500';
   };
@@ -143,7 +143,7 @@ function OutputPanel() {
   return (
     <div 
       className={cn(
-        "border-t border-border bg-[#0d1117] transition-all duration-200",
+        "border-t border-border bg-[#171514] transition-all duration-200",
         outputPanelOpen ? "" : "h-8"
       )}
       style={{ height: outputPanelOpen ? outputHeight : 32 }}
@@ -164,12 +164,12 @@ function OutputPanel() {
           />
         )}
 
-        <div className="flex items-center justify-between border-b border-border bg-[#161b22] px-3 h-8">
+        <div className="flex items-center justify-between border-b border-border bg-[#23201e] px-3 h-8">
           <div className="flex items-center gap-2">
             {getStatusIcon()}
             <span className="text-[11px] font-medium text-foreground">Console</span>
             {outputPanelOpen && (
-              <TabsList className="h-6 rounded-md bg-[#0d1117] p-0.5">
+              <TabsList className="h-6 rounded-md bg-[#171514] p-0.5">
                 <TabsTrigger value="input" className="h-5 px-2 text-[10px]">
                   Input
                 </TabsTrigger>
@@ -250,7 +250,7 @@ function OutputPanel() {
             suppressHydrationWarning
           >
             <TabsContent value="input" className="mt-0 h-full">
-              <div className="flex h-full flex-col gap-2 bg-[#111827] p-3">
+              <div className="flex h-full flex-col gap-2 bg-[#201c19] p-3">
                 <div className="space-y-1">
                   <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Custom Input
@@ -263,7 +263,7 @@ function OutputPanel() {
                   value={stdin}
                   onChange={(event) => setStdin(event.target.value)}
                   placeholder={'Example:\n4\n2 7 11 15\n9'}
-                  className="h-full min-h-0 flex-1 resize-none border-border bg-[#0d1117] px-3 py-2 text-[12px] text-[#e6edf3] placeholder:text-muted-foreground/70 focus-visible:ring-1"
+                  className="h-full min-h-0 flex-1 resize-none border-border bg-[#171514] px-3 py-2 text-[12px] text-[#f3ede4] placeholder:text-muted-foreground/70 focus-visible:ring-1"
                 />
               </div>
             </TabsContent>
@@ -382,37 +382,37 @@ export function CodeEditor() {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '8b949e', fontStyle: 'italic' },
-        { token: 'keyword', foreground: 'ffa116' },
-        { token: 'string', foreground: 'a5d6ff' },
-        { token: 'number', foreground: '79c0ff' },
-        { token: 'type', foreground: 'ffa116' },
-        { token: 'function', foreground: 'd2a8ff' },
-        { token: 'variable', foreground: 'e6edf3' },
-        { token: 'constant', foreground: '79c0ff' },
+        { token: 'comment', foreground: '9f9486', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'f5a623' },
+        { token: 'string', foreground: 'e7c88b' },
+        { token: 'number', foreground: 'f0b86d' },
+        { token: 'type', foreground: 'f3b34d' },
+        { token: 'function', foreground: 'f7d39a' },
+        { token: 'variable', foreground: 'f3ede4' },
+        { token: 'constant', foreground: 'f0b86d' },
       ],
       colors: {
-        'editor.background': '#0d1117',
-        'editor.foreground': '#e6edf3',
-        'editor.lineHighlightBackground': '#161b22',
-        'editor.selectionBackground': '#264f78',
-        'editor.inactiveSelectionBackground': '#264f7850',
-        'editorLineNumber.foreground': '#484f58',
-        'editorLineNumber.activeForeground': '#8b949e',
-        'editorCursor.foreground': '#ffa116',
-        'editor.selectionHighlightBackground': '#3fb95030',
-        'editorIndentGuide.background': '#21262d',
-        'editorIndentGuide.activeBackground': '#30363d',
-        'editorWhitespace.foreground': '#30363d',
-        'editorBracketMatch.background': '#3fb95030',
-        'editorBracketMatch.border': '#3fb950',
+        'editor.background': '#171514',
+        'editor.foreground': '#f3ede4',
+        'editor.lineHighlightBackground': '#211d1a',
+        'editor.selectionBackground': '#4b392680',
+        'editor.inactiveSelectionBackground': '#4b392640',
+        'editorLineNumber.foreground': '#62574d',
+        'editorLineNumber.activeForeground': '#b9ac9c',
+        'editorCursor.foreground': '#f5a623',
+        'editor.selectionHighlightBackground': '#f5a62320',
+        'editorIndentGuide.background': '#2c2825',
+        'editorIndentGuide.activeBackground': '#3a332d',
+        'editorWhitespace.foreground': '#3a332d',
+        'editorBracketMatch.background': '#f5a62318',
+        'editorBracketMatch.border': '#f5a623',
         // Minimap
-        'minimap.background': '#0d1117',
-        'minimap.selectionHighlight': '#264f78',
+        'minimap.background': '#171514',
+        'minimap.selectionHighlight': '#4b392680',
         // Scrollbar
-        'scrollbarSlider.background': '#484f5833',
-        'scrollbarSlider.hoverBackground': '#484f5855',
-        'scrollbarSlider.activeBackground': '#484f5877',
+        'scrollbarSlider.background': '#5b4e4233',
+        'scrollbarSlider.hoverBackground': '#6a5a4d55',
+        'scrollbarSlider.activeBackground': '#78675777',
       },
     });
 
@@ -549,7 +549,7 @@ export function CodeEditor() {
                     onClick={closeEditor}
                     className="w-3 h-3 rounded-full bg-[#f85149] hover:bg-[#ff6b6b] transition-colors flex items-center justify-center group"
                   >
-                    <X className="w-1.5 h-1.5 text-[#0d1117] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <X className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -566,7 +566,7 @@ export function CodeEditor() {
                     onClick={minimizeEditor}
                     className="w-3 h-3 rounded-full bg-[#d29922] hover:bg-[#f0b429] transition-colors flex items-center justify-center group"
                   >
-                    <Minus className="w-1.5 h-1.5 text-[#0d1117] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Minus className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -583,10 +583,10 @@ export function CodeEditor() {
                     onClick={toggleEditorFocus}
                     className={cn(
                       "w-3 h-3 rounded-full transition-colors flex items-center justify-center group",
-                      editorFocused ? "bg-[#3fb950]" : "bg-[#3fb950] hover:bg-[#4ade80]"
+                      editorFocused ? "bg-[#f0c56b]" : "bg-[#f0c56b] hover:bg-[#f4cf83]"
                     )}
                   >
-                    <Maximize2 className="w-1.5 h-1.5 text-[#0d1117] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Maximize2 className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -612,7 +612,7 @@ export function CodeEditor() {
                   disabled={isRunning}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all",
-                    "bg-[#238636] hover:bg-[#2ea043] text-white",
+                    "bg-[#f5a623] hover:bg-[#ffb53d] text-[#1b1610]",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}
                 >

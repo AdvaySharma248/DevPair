@@ -119,6 +119,7 @@ export function useSessionWebRtc(): SessionWebRtcState {
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const audioSenderRef = useRef<RTCRtpSender | null>(null);
   const videoSenderRef = useRef<RTCRtpSender | null>(null);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const isCreatingOfferRef = useRef(false);
@@ -172,14 +173,15 @@ export function useSessionWebRtc(): SessionWebRtcState {
     (nextStatus: CallStatus = 'Waiting for other participant') => {
       const peerConnection = peerConnectionRef.current;
 
-      if (peerConnection) {
-        peerConnection.onicecandidate = null;
-        peerConnection.ontrack = null;
-        peerConnection.onconnectionstatechange = null;
-        peerConnection.close();
+    if (peerConnection) {
+      peerConnection.onicecandidate = null;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
       }
 
       peerConnectionRef.current = null;
+      audioSenderRef.current = null;
       videoSenderRef.current = null;
       pendingIceCandidatesRef.current = [];
       isCreatingOfferRef.current = false;
@@ -193,6 +195,7 @@ export function useSessionWebRtc(): SessionWebRtcState {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     setHasLocalStream(false);
+    audioSenderRef.current = null;
     videoSenderRef.current = null;
 
     if (localVideoElementRef.current) {
@@ -224,6 +227,10 @@ export function useSessionWebRtc(): SessionWebRtcState {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         const sender = peerConnection.addTrack(track, localStreamRef.current as MediaStream);
+
+        if (track.kind === 'audio') {
+          audioSenderRef.current = sender;
+        }
 
         if (track.kind === 'video') {
           videoSenderRef.current = sender;
@@ -281,7 +288,13 @@ export function useSessionWebRtc(): SessionWebRtcState {
   }, [attachRemoteStream, closePeerConnection, currentSessionId]);
 
   const ensureLocalMedia = useCallback(
-    async ({ includeVideo = !isCameraOff }: { includeVideo?: boolean } = {}) => {
+    async ({
+      includeAudio = !isMuted,
+      includeVideo = !isCameraOff,
+    }: {
+      includeAudio?: boolean;
+      includeVideo?: boolean;
+    } = {}) => {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Media devices are unavailable');
       }
@@ -289,10 +302,15 @@ export function useSessionWebRtc(): SessionWebRtcState {
       let stream = localStreamRef.current;
 
       if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: includeVideo,
-        });
+        if (!includeAudio && !includeVideo) {
+          stream = new MediaStream();
+        } else {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: includeAudio,
+            video: includeVideo,
+          });
+        }
+
         localStreamRef.current = stream;
       } else {
         const hasLiveAudioTrack = stream
@@ -302,9 +320,9 @@ export function useSessionWebRtc(): SessionWebRtcState {
           .getVideoTracks()
           .some((track) => track.readyState === 'live');
 
-        if (!hasLiveAudioTrack || (includeVideo && !hasLiveVideoTrack)) {
+        if ((includeAudio && !hasLiveAudioTrack) || (includeVideo && !hasLiveVideoTrack)) {
           const extraStream = await navigator.mediaDevices.getUserMedia({
-            audio: !hasLiveAudioTrack,
+            audio: includeAudio && !hasLiveAudioTrack,
             video: includeVideo && !hasLiveVideoTrack,
           });
 
@@ -321,8 +339,30 @@ export function useSessionWebRtc(): SessionWebRtcState {
 
       return stream;
     },
-    [attachLocalStream, isCameraOff],
+    [attachLocalStream, isCameraOff, isMuted],
   );
+
+  const releaseMicrophoneTrack = useCallback(async () => {
+    const stream = localStreamRef.current;
+
+    if (!stream) {
+      return;
+    }
+
+    const audioTrack = stream.getAudioTracks()[0];
+
+    if (!audioTrack) {
+      return;
+    }
+
+    if (audioSenderRef.current) {
+      await audioSenderRef.current.replaceTrack(null);
+    }
+
+    stream.removeTrack(audioTrack);
+    audioTrack.stop();
+    attachLocalStream();
+  }, [attachLocalStream]);
 
   const releaseCameraTrack = useCallback(async () => {
     const stream = localStreamRef.current;
@@ -370,7 +410,10 @@ export function useSessionWebRtc(): SessionWebRtcState {
         peerConnection.localDescription
       ) {
         closePeerConnection('Connecting...');
-        await ensureLocalMedia({ includeVideo: !isCameraOff });
+        await ensureLocalMedia({
+          includeAudio: !isMuted,
+          includeVideo: !isCameraOff,
+        });
         peerConnection = ensurePeerConnection();
       }
 
@@ -393,12 +436,59 @@ export function useSessionWebRtc(): SessionWebRtcState {
     currentSessionId,
     currentUserRole,
     isCameraOff,
+    isMuted,
     ensureLocalMedia,
     ensurePeerConnection,
   ]);
 
+  const ensureMicrophoneTrack = useCallback(async () => {
+    const stream = await ensureLocalMedia({
+      includeAudio: true,
+      includeVideo: !isCameraOff,
+    });
+    const liveAudioTrack = stream
+      .getAudioTracks()
+      .find((track) => track.readyState === 'live');
+
+    if (!liveAudioTrack) {
+      return;
+    }
+
+    const peerConnection = peerConnectionRef.current;
+
+    if (peerConnection) {
+      if (audioSenderRef.current) {
+        if (audioSenderRef.current.track !== liveAudioTrack) {
+          await audioSenderRef.current.replaceTrack(liveAudioTrack);
+        }
+      } else {
+        audioSenderRef.current = peerConnection.addTrack(liveAudioTrack, stream);
+
+        if (currentSessionId) {
+          if (currentUserRole === 'mentor') {
+            void maybeCreateOffer();
+          } else {
+            emitWebRtcReady(currentSessionId);
+          }
+        }
+      }
+    }
+
+    attachLocalStream();
+  }, [
+    attachLocalStream,
+    currentSessionId,
+    currentUserRole,
+    ensureLocalMedia,
+    isCameraOff,
+    maybeCreateOffer,
+  ]);
+
   const ensureCameraTrack = useCallback(async () => {
-    const stream = await ensureLocalMedia({ includeVideo: true });
+    const stream = await ensureLocalMedia({
+      includeAudio: !isMuted,
+      includeVideo: true,
+    });
     const liveVideoTrack = stream
       .getVideoTracks()
       .find((track) => track.readyState === 'live');
@@ -434,6 +524,7 @@ export function useSessionWebRtc(): SessionWebRtcState {
     currentSessionId,
     currentUserRole,
     ensureLocalMedia,
+    isMuted,
     maybeCreateOffer,
   ]);
 
@@ -454,7 +545,10 @@ export function useSessionWebRtc(): SessionWebRtcState {
     const bootstrapRealtimeCall = async () => {
       try {
         setCallStatus('Preparing camera...');
-        await ensureLocalMedia({ includeVideo: !isCameraOff });
+        await ensureLocalMedia({
+          includeAudio: !isMuted,
+          includeVideo: !isCameraOff,
+        });
 
         if (!isActive) {
           return;
@@ -520,7 +614,10 @@ export function useSessionWebRtc(): SessionWebRtcState {
           return;
         }
 
-        await ensureLocalMedia({ includeVideo: !isCameraOff });
+        await ensureLocalMedia({
+          includeAudio: !isMuted,
+          includeVideo: !isCameraOff,
+        });
         let peerConnection = ensurePeerConnection();
 
         if (
@@ -528,7 +625,10 @@ export function useSessionWebRtc(): SessionWebRtcState {
           peerConnection.remoteDescription
         ) {
           closePeerConnection('Connecting...');
-          await ensureLocalMedia();
+          await ensureLocalMedia({
+            includeAudio: !isMuted,
+            includeVideo: !isCameraOff,
+          });
           peerConnection = ensurePeerConnection();
         }
 
@@ -648,6 +748,7 @@ export function useSessionWebRtc(): SessionWebRtcState {
     currentUserId,
     currentUserRole,
     isCameraOff,
+    isMuted,
     ensureLocalMedia,
     ensurePeerConnection,
     flushPendingIceCandidates,
@@ -656,32 +757,36 @@ export function useSessionWebRtc(): SessionWebRtcState {
   ]);
 
   useEffect(() => {
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = !isMuted;
-    });
-
-    const syncCameraState = async () => {
+    const syncDeviceState = async () => {
       if (!currentSessionId || !localStreamRef.current) {
         return;
       }
 
       try {
+        if (isMuted) {
+          await releaseMicrophoneTrack();
+        } else {
+          await ensureMicrophoneTrack();
+        }
+
         if (isCameraOff) {
           await releaseCameraTrack();
         } else {
           await ensureCameraTrack();
         }
       } catch (error) {
-        console.error('Failed to sync camera state:', error);
+        console.error('Failed to sync media device state:', error);
       }
     };
 
-    void syncCameraState();
+    void syncDeviceState();
   }, [
     currentSessionId,
     ensureCameraTrack,
+    ensureMicrophoneTrack,
     isCameraOff,
     isMuted,
+    releaseMicrophoneTrack,
     releaseCameraTrack,
   ]);
 

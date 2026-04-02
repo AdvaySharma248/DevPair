@@ -168,8 +168,8 @@ export const useMentorshipStore = create<MentorshipState>((set) => ({
   language: FALLBACK_LANGUAGE,
   remoteCodeSyncVersion: 0,
   stdin: '',
-  isMuted: false,
-  isCameraOff: false,
+  isMuted: true,
+  isCameraOff: true,
   leftPanelCollapsed: false,
   chatVisible: true,
   videoVisible: true,
@@ -228,8 +228,8 @@ export const useMentorshipStore = create<MentorshipState>((set) => ({
       code: getDefaultCode(FALLBACK_LANGUAGE),
       language: FALLBACK_LANGUAGE,
       stdin: '',
-      isMuted: false,
-      isCameraOff: false,
+      isMuted: true,
+      isCameraOff: true,
     });
   },
   
@@ -401,6 +401,8 @@ export const useMentorshipStore = create<MentorshipState>((set) => ({
       language: editorLanguage,
       code: editorCode,
       stdin: '',
+      isMuted: true,
+      isCameraOff: true,
       leftPanelCollapsed: false,
       chatVisible: true,
       videoVisible: true,
@@ -422,6 +424,8 @@ export const useMentorshipStore = create<MentorshipState>((set) => ({
         ? getDefaultCode(preferredLanguage)
         : state.code,
       stdin: '',
+      isMuted: true,
+      isCameraOff: true,
     };
   }),
 

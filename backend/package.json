@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env --experimental-strip-types scripts/dev.ts",
-    "dev:server": "node --env-file=.env --experimental-strip-types src/server.ts",
-    "start": "node --env-file=.env --experimental-strip-types src/server.ts",
+    "dev": "node --env-file-if-exists=.env --experimental-strip-types scripts/dev.ts",
+    "dev:server": "node --env-file-if-exists=.env --experimental-strip-types src/server.ts",
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/server.ts",
     "dev:runner": "node --watch --experimental-strip-types services/code-execution/index.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
-    "seed:users": "node --env-file=.env --experimental-strip-types scripts/seed-users.ts"
+    "seed:users": "node --env-file-if-exists=.env --experimental-strip-types scripts/seed-users.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",

@@ -4,6 +4,8 @@ import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   deleteUser,
+  reload,
+  sendEmailVerification,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
@@ -14,7 +16,8 @@ import type { User, UserRole } from '@/store/mentorship-store';
 import { getFirebaseAuth } from './firebase';
 
 interface FirebaseSessionResponse {
-  user: User;
+  user?: User;
+  requiresEmailVerification?: boolean;
 }
 
 interface SignupOptions {
@@ -24,11 +27,61 @@ interface SignupOptions {
   role: UserRole;
 }
 
+interface PendingSignupProfile {
+  email: string;
+  name: string;
+  role: UserRole;
+}
+
+type FirebaseAuthOutcome =
+  | { type: 'authenticated'; user: User }
+  | { type: 'email_verification_required' };
+
+const pendingSignupProfileStorageKey = 'devpair_pending_signup_profile';
+
+function savePendingSignupProfile(profile: PendingSignupProfile) {
+  window.localStorage.setItem(
+    pendingSignupProfileStorageKey,
+    JSON.stringify({
+      ...profile,
+      email: profile.email.toLowerCase(),
+    }),
+  );
+}
+
+function getPendingSignupProfile(email?: string) {
+  const rawValue = window.localStorage.getItem(pendingSignupProfileStorageKey);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedProfile = JSON.parse(rawValue) as PendingSignupProfile;
+
+    if (!email || parsedProfile.email === email.toLowerCase()) {
+      return parsedProfile;
+    }
+  } catch {
+    window.localStorage.removeItem(pendingSignupProfileStorageKey);
+  }
+
+  return null;
+}
+
+function clearPendingSignupProfile(email?: string) {
+  const pendingProfile = getPendingSignupProfile(email);
+
+  if (pendingProfile) {
+    window.localStorage.removeItem(pendingSignupProfileStorageKey);
+  }
+}
+
 async function exchangeFirebaseTokenForSession(input: {
   idToken: string;
   name?: string;
   role?: UserRole;
-}) {
+}): Promise<FirebaseAuthOutcome> {
   const response = await fetch('/api/auth/firebase', {
     method: 'POST',
     headers: {
@@ -43,7 +96,18 @@ async function exchangeFirebaseTokenForSession(input: {
     throw new Error(data?.error || 'Failed to create backend session');
   }
 
-  return data.user;
+  if (data?.requiresEmailVerification) {
+    return { type: 'email_verification_required' };
+  }
+
+  if (!data?.user) {
+    throw new Error('Failed to create backend session');
+  }
+
+  return {
+    type: 'authenticated',
+    user: data.user,
+  };
 }
 
 async function ensureFirebasePersistence() {
@@ -53,10 +117,36 @@ async function ensureFirebasePersistence() {
 export async function loginWithFirebase(email: string, password: string) {
   await ensureFirebasePersistence();
 
-  const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
-  const idToken = await credential.user.getIdToken();
+  const auth = getFirebaseAuth();
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  await reload(credential.user);
 
-  return exchangeFirebaseTokenForSession({ idToken });
+  if (!credential.user.emailVerified) {
+    await signOut(auth).catch(() => undefined);
+    return { type: 'email_verification_required' } satisfies FirebaseAuthOutcome;
+  }
+
+  const pendingSignupProfile = getPendingSignupProfile(credential.user.email ?? email);
+  const idToken = await credential.user.getIdToken(true);
+  const result = await exchangeFirebaseTokenForSession({
+    idToken,
+    ...(pendingSignupProfile
+      ? {
+          name: pendingSignupProfile.name,
+          role: pendingSignupProfile.role,
+        }
+      : {}),
+  });
+
+  if (result.type === 'authenticated') {
+    clearPendingSignupProfile(credential.user.email ?? email);
+  }
+
+  if (result.type === 'email_verification_required') {
+    await signOut(auth).catch(() => undefined);
+  }
+
+  return result;
 }
 
 export async function signupWithFirebase({
@@ -67,25 +157,42 @@ export async function signupWithFirebase({
 }: SignupOptions) {
   await ensureFirebasePersistence();
 
+  const auth = getFirebaseAuth();
   const credential = await createUserWithEmailAndPassword(
-    getFirebaseAuth(),
+    auth,
     email,
     password,
   );
+
+  savePendingSignupProfile({
+    email,
+    name,
+    role,
+  });
 
   try {
     await updateProfile(credential.user, {
       displayName: name,
     });
 
-    const idToken = await credential.user.getIdToken();
+    await sendEmailVerification(credential.user);
 
-    return await exchangeFirebaseTokenForSession({
-      idToken,
-      name,
-      role,
-    });
+    try {
+      const idToken = await credential.user.getIdToken(true);
+      await exchangeFirebaseTokenForSession({
+        idToken,
+        name,
+        role,
+      });
+    } catch (error) {
+      console.warn('Failed to prepare backend account during signup:', error);
+    }
+
+    await signOut(auth).catch(() => undefined);
+
+    return { type: 'email_verification_required' } satisfies FirebaseAuthOutcome;
   } catch (error) {
+    clearPendingSignupProfile(email);
     await deleteUser(credential.user).catch(() => undefined);
     throw error;
   }
@@ -100,8 +207,30 @@ export async function restoreBackendSessionFromFirebase() {
   }
 
   try {
-    const idToken = await firebaseUser.getIdToken();
-    return await exchangeFirebaseTokenForSession({ idToken });
+    await reload(firebaseUser);
+
+    if (!firebaseUser.emailVerified) {
+      return null;
+    }
+
+    const pendingSignupProfile = getPendingSignupProfile(firebaseUser.email ?? undefined);
+    const idToken = await firebaseUser.getIdToken(true);
+    const result = await exchangeFirebaseTokenForSession({
+      idToken,
+      ...(pendingSignupProfile
+        ? {
+            name: pendingSignupProfile.name,
+            role: pendingSignupProfile.role,
+          }
+        : {}),
+    });
+
+    if (result.type !== 'authenticated') {
+      return null;
+    }
+
+    clearPendingSignupProfile(firebaseUser.email ?? undefined);
+    return result.user;
   } catch (error) {
     console.error('Failed to restore backend session from Firebase:', error);
     return null;
@@ -142,6 +271,10 @@ export function getFirebaseAuthErrorMessage(error: unknown) {
       return 'Too many attempts. Please wait a moment and try again.';
     default:
       if (error instanceof Error) {
+        if (error.message === 'Please verify your email before signing in.') {
+          return 'Please verify your email before signing in. Check your inbox and spam folder.';
+        }
+
         return error.message;
       }
 

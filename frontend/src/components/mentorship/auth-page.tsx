@@ -22,6 +22,7 @@ export function AuthPage() {
   const [role, setRole] = useState<UserRole>('student');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   
   const setUser = useMentorshipStore((state) => state.setUser);
 
@@ -29,13 +30,25 @@ export function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setMessage('');
 
     try {
-      const authenticatedUser = isLogin
+      const authResult = isLogin
         ? await loginWithFirebase(email, password)
         : await signupWithFirebase({ email, password, name, role });
 
-      setUser(authenticatedUser);
+      if (authResult.type === 'email_verification_required') {
+        setIsLogin(true);
+        setPassword('');
+        setMessage(
+          isLogin
+            ? 'Please verify your email before signing in. Check your inbox and spam folder.'
+            : 'Verification email sent. Please check your inbox, verify your email, and then sign in.',
+        );
+        return;
+      }
+
+      setUser(authResult.user);
     } catch (err) {
       setError(getFirebaseAuthErrorMessage(err));
     } finally {
@@ -139,6 +152,12 @@ export function AuthPage() {
               </div>
             )}
 
+            {message && (
+              <div className="rounded border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-xs text-emerald-300">
+                {message}
+              </div>
+            )}
+
             <Button 
               type="submit" 
               className="w-full h-9 bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
@@ -162,6 +181,7 @@ export function AuthPage() {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError('');
+                setMessage('');
               }}
               className="ml-1.5 text-primary hover:underline font-medium"
             >

@@ -1,6 +1,7 @@
 'use client';
 
 import { io, type Socket } from 'socket.io-client';
+import { getFirebaseAuth } from './firebase';
 
 interface ApiMessagePayload {
   id: string;
@@ -111,6 +112,23 @@ function getSocketServerUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
 }
 
+async function getSocketAuthPayload() {
+  try {
+    const auth = getFirebaseAuth();
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      return {};
+    }
+
+    const firebaseIdToken = await firebaseUser.getIdToken();
+    return firebaseIdToken ? { firebaseIdToken } : {};
+  } catch (error) {
+    console.error('Failed to prepare realtime socket auth:', error);
+    return {};
+  }
+}
+
 export function getDevPairSocket() {
   if (typeof window === 'undefined') {
     return null;
@@ -120,8 +138,17 @@ export function getDevPairSocket() {
     socketInstance = io(getSocketServerUrl(), {
       withCredentials: true,
       autoConnect: false,
+      auth: (callback) => {
+        void getSocketAuthPayload()
+          .then((payload) => callback(payload))
+          .catch(() => callback({}));
+      },
       transports: ['websocket', 'polling'],
     }) as DevPairClientSocket;
+
+    socketInstance.on('connect_error', (error) => {
+      console.error('Realtime socket connection failed:', error.message);
+    });
   }
 
   return socketInstance;

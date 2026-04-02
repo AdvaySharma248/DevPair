@@ -146,6 +146,10 @@ export async function loginWithFirebase(input: unknown) {
     });
   }
 
+  if (!decodedToken.email_verified) {
+    throw new AppError("Please verify your email before signing in.", 403);
+  }
+
   const { token } = await createDbSession(user.id);
 
   return {

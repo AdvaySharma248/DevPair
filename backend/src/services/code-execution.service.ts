@@ -240,6 +240,14 @@ function findJavaFallbackCompilationError(code: string) {
     /\b(?:byte|short|int|long|float|double|boolean|char|String|var|final\s+(?:byte|short|int|long|float|double|boolean|char|String|var)|public|private|protected|static)\s+(?:final\s+)?(?:byte|short|int|long|float|double|boolean|char|String|[A-Z][A-Za-z0-9_<>\[\]]*)\s+([A-Za-z_]\w*)\b/g;
   const parameterPattern =
     /\(([^)]*)\)/g;
+  const javaControlStatementPattern =
+    /^(?:if|for|while|switch|catch|else|try|do|finally|synchronized)\b/;
+  const javaDeclarationPattern =
+    /^(?:final\s+)?(?:byte|short|int|long|float|double|boolean|char|String|var|[A-Z][A-Za-z0-9_<>\[\]]*)(?:\s*\[\s*\])?\s+[A-Za-z_]\w*(?:\s*=\s*.+)?$/;
+
+  const sanitizedLines = code
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\/\/.*$/, "").trim());
 
   for (const match of code.matchAll(declarationPattern)) {
     if (match[1]) {
@@ -283,6 +291,51 @@ function findJavaFallbackCompilationError(code: string) {
       !["true", "false", "null"].includes(identifier)
     ) {
       return `cannot find symbol\n  symbol:   variable ${identifier}`;
+    }
+  }
+
+  for (const line of sanitizedLines) {
+    if (!line || line === "{" || line === "}") {
+      continue;
+    }
+
+    if (
+      line.startsWith("package ") ||
+      line.startsWith("import ") ||
+      line.startsWith("@") ||
+      line.startsWith("class ") ||
+      line.startsWith("public class ") ||
+      line.startsWith("private class ") ||
+      line.startsWith("protected class ") ||
+      line.startsWith("interface ") ||
+      line.startsWith("enum ")
+    ) {
+      continue;
+    }
+
+    if (line.endsWith("{") || line.endsWith("}") || line.endsWith(";")) {
+      continue;
+    }
+
+    if (javaControlStatementPattern.test(line)) {
+      continue;
+    }
+
+    if (/^(?:public|private|protected)?\s*(?:static\s+)?[\w<>\[\]]+\s+\w+\s*\([^)]*\)$/.test(line)) {
+      continue;
+    }
+
+    if (/^[A-Za-z_]\w*$/.test(line)) {
+      return "not a statement\n';' expected";
+    }
+
+    if (
+      javaDeclarationPattern.test(line) ||
+      /^(?:return|throw)\b/.test(line) ||
+      /^[A-Za-z_][\w.]*\s*\([^;]*\)$/.test(line) ||
+      /^[A-Za-z_][\w.\[\]]*\s*(?:=|\+\+|--|\+=|-=|\*=|\/=|%=).+$/.test(line)
+    ) {
+      return "';' expected";
     }
   }
 

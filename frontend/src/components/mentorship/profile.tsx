@@ -142,10 +142,10 @@ function ProfileSummary() {
 
   // Profile completion calculation
   const profileFields = [
-    !!user?.name,
-    !!user?.email,
-    !!user?.bio,
-    !!user?.avatar,
+    !!user?.name?.trim(),
+    !!user?.email?.trim(),
+    !!user?.bio?.trim(),
+    !!user?.defaultLanguage?.trim(),
   ];
   const completionPercent = Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100);
 

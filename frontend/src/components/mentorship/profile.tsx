@@ -33,6 +33,7 @@ import {
 import { useMentorshipStore, Session } from '@/store/mentorship-store';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { logoutEverywhere } from '@/lib/firebase-auth';
 import {
   Tooltip,
   TooltipContent,
@@ -50,6 +51,7 @@ function ProfileNav() {
     
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
+      await logoutEverywhere();
       logout();
       toast({
         title: 'Logged out successfully',

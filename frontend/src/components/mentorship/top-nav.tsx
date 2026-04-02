@@ -11,9 +11,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { logoutEverywhere } from '@/lib/firebase-auth';
 
 export function TopNav() {
   const { user, currentSession, logout, leftPanelCollapsed, toggleLeftPanel } = useMentorshipStore();
+
+  const handleLogout = async () => {
+    await logoutEverywhere();
+    logout();
+  };
 
   return (
     <header className="h-14 border-b border-border bg-card flex items-center justify-between px-3 sm:px-4 shrink-0">
@@ -85,7 +91,7 @@ export function TopNav() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={logout}
+                    onClick={() => void handleLogout()}
                     className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
                   >
                     <LogOut className="h-4 w-4" />

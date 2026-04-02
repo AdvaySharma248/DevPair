@@ -7,6 +7,7 @@ import { Workspace } from '@/components/mentorship/workspace';
 import { Profile } from '@/components/mentorship/profile';
 import { Toaster } from '@/components/ui/toast';
 import { useEffect } from 'react';
+import { restoreBackendSessionFromFirebase } from '@/lib/firebase-auth';
 
 export default function Home() {
   const { isAuthenticated, user, currentView, setUser, activateDueSessions } = useMentorshipStore();
@@ -43,6 +44,13 @@ export default function Home() {
         }
 
         if (response.status === 401) {
+          const restoredUser = await restoreBackendSessionFromFirebase();
+
+          if (restoredUser) {
+            setUser(restoredUser);
+            return;
+          }
+
           setUser(null);
         }
       } catch (error) {

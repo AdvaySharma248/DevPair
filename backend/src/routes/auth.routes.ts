@@ -2,6 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../lib/async-handler.ts";
 import {
   getSessionCookieOptions,
+  loginWithFirebase,
   login,
   logout,
   signup,
@@ -18,6 +19,16 @@ authRouter.post(
     response
       .cookie(env.SESSION_COOKIE_NAME, result.token, getSessionCookieOptions())
       .status(201)
+      .json({ user: result.user });
+  }),
+);
+
+authRouter.post(
+  "/firebase",
+  asyncHandler(async (request, response) => {
+    const result = await loginWithFirebase(request.body);
+    response
+      .cookie(env.SESSION_COOKIE_NAME, result.token, getSessionCookieOptions())
       .json({ user: result.user });
   }),
 );

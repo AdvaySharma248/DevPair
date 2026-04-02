@@ -8,6 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useMentorshipStore, UserRole } from '@/store/mentorship-store';
 import { Code2, Loader2 } from 'lucide-react';
+import {
+  getFirebaseAuthErrorMessage,
+  loginWithFirebase,
+  signupWithFirebase,
+} from '@/lib/firebase-auth';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -26,26 +31,13 @@ export function AuthPage() {
     setError('');
 
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-      const body = isLogin 
-        ? { email, password }
-        : { email, password, name, role };
+      const authenticatedUser = isLogin
+        ? await loginWithFirebase(email, password)
+        : await signupWithFirebase({ email, password, name, role });
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed');
-      }
-
-      setUser(data.user);
+      setUser(authenticatedUser);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(getFirebaseAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

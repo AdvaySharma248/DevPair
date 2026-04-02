@@ -8,6 +8,7 @@ import { Workspace } from '@/components/mentorship/workspace';
 import { Button } from '@/components/ui/button';
 import { useMentorshipStore } from '@/store/mentorship-store';
 import { mapApiMessage, mapApiSession } from '@/lib/session-api';
+import { restoreBackendSessionFromFirebase } from '@/lib/firebase-auth';
 
 export default function SessionPage() {
   const params = useParams<{ id: string }>();
@@ -59,6 +60,13 @@ export default function SessionPage() {
           const data = await response.json();
           setUser(data.user);
         } else if (response.status === 401) {
+          const restoredUser = await restoreBackendSessionFromFirebase();
+
+          if (restoredUser) {
+            setUser(restoredUser);
+            return;
+          }
+
           setUser(null);
         }
       } catch (sessionError) {

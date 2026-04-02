@@ -4,6 +4,7 @@ import type { AuthSession, User } from "@prisma/client";
 import { env } from "../config/env.ts";
 import { db } from "../lib/db.ts";
 import { AppError } from "../lib/errors.ts";
+import { verifyFirebaseIdToken } from "../lib/firebase-admin.ts";
 import { serializeUser } from "../lib/serializers.ts";
 import { createSessionToken, hashSessionToken } from "../lib/security.ts";
 
@@ -17,6 +18,12 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().trim().email("A valid email is required"),
   password: z.string().min(1, "Password is required"),
+});
+
+const firebaseSessionSchema = z.object({
+  idToken: z.string().trim().min(1, "Firebase ID token is required"),
+  role: z.enum(["mentor", "student"]).optional(),
+  name: z.string().trim().min(1).max(120).optional(),
 });
 
 const updateProfileSchema = z.object({
@@ -92,6 +99,51 @@ export async function login(input: unknown) {
 
   if (!isValidPassword) {
     throw new AppError("Invalid email or password", 401);
+  }
+
+  const { token } = await createDbSession(user.id);
+
+  return {
+    user: serializeUser(user),
+    token,
+  };
+}
+
+export async function loginWithFirebase(input: unknown) {
+  const data = firebaseSessionSchema.parse(input);
+  const decodedToken = await verifyFirebaseIdToken(data.idToken);
+  const email = decodedToken.email?.trim().toLowerCase();
+
+  if (!email) {
+    throw new AppError("Firebase account is missing an email address", 400);
+  }
+
+  const existingUser = await db.user.findUnique({
+    where: { email },
+  });
+
+  let user = existingUser;
+
+  if (!user) {
+    if (!data.role) {
+      throw new AppError("Role is required when creating a new account", 400);
+    }
+
+    const fallbackName = email.split("@")[0] ?? "Firebase User";
+    const name =
+      data.name?.trim() ||
+      decodedToken.name?.trim() ||
+      fallbackName;
+    const passwordHash = await argon2.hash(createSessionToken());
+
+    user = await db.user.create({
+      data: {
+        email,
+        name,
+        passwordHash,
+        role: data.role.toUpperCase() as "MENTOR" | "STUDENT",
+      },
+    });
   }
 
   const { token } = await createDbSession(user.id);

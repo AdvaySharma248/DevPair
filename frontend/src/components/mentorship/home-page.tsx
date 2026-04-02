@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMentorshipStore, Session } from '@/store/mentorship-store';
+import { logoutEverywhere } from '@/lib/firebase-auth';
 import { 
   Code2, 
   Plus, 
@@ -123,6 +124,11 @@ export function HomePage() {
   const activeSessions = sessions.filter(s => s.status === 'ACTIVE');
   const pastSessions = sessions.filter(s => s.status === 'ENDED');
 
+  const handleLogout = async () => {
+    await logoutEverywhere();
+    logout();
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -155,7 +161,7 @@ export function HomePage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={logout}
+              onClick={() => void handleLogout()}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />

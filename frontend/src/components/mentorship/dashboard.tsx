@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 import { mapApiSession } from '@/lib/session-api';
+import { logoutEverywhere } from '@/lib/firebase-auth';
 
 function toDateInputValue(date: Date) {
   const year = date.getFullYear();
@@ -71,8 +72,7 @@ function DashboardNav() {
     try {
       // Small delay for UI feedback
       await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Call logout to clear state and localStorage
+      await logoutEverywhere();
       logout();
       
       toast({

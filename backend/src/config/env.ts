@@ -6,6 +6,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().min(1).default("http://localhost:3000"),
   SESSION_COOKIE_NAME: z.string().min(1).default("devpair_session"),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().trim().email().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().trim().min(1).optional(),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

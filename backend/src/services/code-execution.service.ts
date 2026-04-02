@@ -234,6 +234,20 @@ function findUnbalancedDelimiter(code: string) {
   return "";
 }
 
+function findJavaFallbackCompilationError(code: string) {
+  const stdoutCallMatch = code.match(/\bSystem\.out\.(\w+)\s*\(/);
+
+  if (stdoutCallMatch?.[1]) {
+    const methodName = stdoutCallMatch[1];
+
+    if (!["print", "println", "printf"].includes(methodName)) {
+      return `cannot find symbol\n  symbol:   method ${methodName}()`;
+    }
+  }
+
+  return "";
+}
+
 function looksLikeCompilationError(code: string, language: (typeof supportedLanguages)[number]) {
   const trimmedCode = code.trim();
 
@@ -255,6 +269,14 @@ function looksLikeCompilationError(code: string, language: (typeof supportedLang
 
   if (delimiterError) {
     return delimiterError;
+  }
+
+  if (language === "java") {
+    const javaFallbackError = findJavaFallbackCompilationError(trimmedCode);
+
+    if (javaFallbackError) {
+      return javaFallbackError;
+    }
   }
 
   if (

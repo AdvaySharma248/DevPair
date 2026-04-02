@@ -235,6 +235,33 @@ function findUnbalancedDelimiter(code: string) {
 }
 
 function findJavaFallbackCompilationError(code: string) {
+  const declaredIdentifiers = new Set<string>();
+  const declarationPattern =
+    /\b(?:byte|short|int|long|float|double|boolean|char|String|var|final\s+(?:byte|short|int|long|float|double|boolean|char|String|var)|public|private|protected|static)\s+(?:final\s+)?(?:byte|short|int|long|float|double|boolean|char|String|[A-Z][A-Za-z0-9_<>\[\]]*)\s+([A-Za-z_]\w*)\b/g;
+  const parameterPattern =
+    /\(([^)]*)\)/g;
+
+  for (const match of code.matchAll(declarationPattern)) {
+    if (match[1]) {
+      declaredIdentifiers.add(match[1]);
+    }
+  }
+
+  for (const parameterGroup of code.matchAll(parameterPattern)) {
+    const parameters = parameterGroup[1]
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    for (const parameter of parameters ?? []) {
+      const parameterMatch = parameter.match(/([A-Za-z_]\w*)\s*(?:\[\s*\])?$/);
+
+      if (parameterMatch?.[1]) {
+        declaredIdentifiers.add(parameterMatch[1]);
+      }
+    }
+  }
+
   const stdoutCallMatch = code.match(/\bSystem\.out\.(\w+)\s*\(/);
 
   if (stdoutCallMatch?.[1]) {
@@ -242,6 +269,20 @@ function findJavaFallbackCompilationError(code: string) {
 
     if (!["print", "println", "printf"].includes(methodName)) {
       return `cannot find symbol\n  symbol:   method ${methodName}()`;
+    }
+  }
+
+  const printCallPattern = /\bSystem\.out\.(?:print|println|printf)\s*\(\s*([A-Za-z_]\w*)\s*\)/g;
+
+  for (const match of code.matchAll(printCallPattern)) {
+    const identifier = match[1];
+
+    if (
+      identifier &&
+      !declaredIdentifiers.has(identifier) &&
+      !["true", "false", "null"].includes(identifier)
+    ) {
+      return `cannot find symbol\n  symbol:   variable ${identifier}`;
     }
   }
 

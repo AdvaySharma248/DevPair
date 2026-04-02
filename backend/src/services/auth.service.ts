@@ -122,6 +122,10 @@ export async function loginWithFirebase(input: unknown) {
     where: { email },
   });
 
+  if (!decodedToken.email_verified) {
+    throw new AppError("Please verify your email before signing in.", 403);
+  }
+
   let user = existingUser;
 
   if (!user) {
@@ -144,10 +148,6 @@ export async function loginWithFirebase(input: unknown) {
         role: data.role.toUpperCase() as "MENTOR" | "STUDENT",
       },
     });
-  }
-
-  if (!decodedToken.email_verified) {
-    throw new AppError("Please verify your email before signing in.", 403);
   }
 
   const { token } = await createDbSession(user.id);

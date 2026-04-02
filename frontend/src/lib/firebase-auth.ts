@@ -176,17 +176,9 @@ export async function signupWithFirebase({
     });
 
     await sendEmailVerification(credential.user);
-
-    try {
-      const idToken = await credential.user.getIdToken(true);
-      await exchangeFirebaseTokenForSession({
-        idToken,
-        name,
-        role,
-      });
-    } catch (error) {
-      console.warn('Failed to prepare backend account during signup:', error);
-    }
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+    }).catch(() => undefined);
 
     await signOut(auth).catch(() => undefined);
 

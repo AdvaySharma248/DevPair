@@ -38,6 +38,7 @@ export function AuthPage() {
         : await signupWithFirebase({ email, password, name, role });
 
       if (authResult.type === 'email_verification_required') {
+        setUser(null);
         setIsLogin(true);
         setPassword('');
         setMessage(

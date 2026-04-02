@@ -395,26 +395,18 @@ export function useSessionWebRtc(): SessionWebRtcState {
       return;
     }
 
-    let peerConnection = ensurePeerConnection();
-
-    if (peerConnection.connectionState === 'connected') {
-      return;
-    }
+    const peerConnection = ensurePeerConnection();
 
     try {
       isCreatingOfferRef.current = true;
       setCallStatus('Connecting...');
 
-      if (
-        peerConnection.signalingState !== 'stable' ||
-        peerConnection.localDescription
-      ) {
-        closePeerConnection('Connecting...');
-        await ensureLocalMedia({
-          includeAudio: !isMuted,
-          includeVideo: !isCameraOff,
-        });
-        peerConnection = ensurePeerConnection();
+      if (peerConnection.signalingState !== 'stable') {
+        console.warn(
+          'Skipping WebRTC offer because signaling is not stable',
+          peerConnection.signalingState,
+        );
+        return;
       }
 
       const offer = await peerConnection.createOffer();

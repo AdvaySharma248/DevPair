@@ -235,19 +235,26 @@ export function useSessionWebRtc(): SessionWebRtcState {
 
     const peerConnection = new RTCPeerConnection(getPeerConnectionConfig());
     const sessionId = currentSessionId;
+    const audioTransceiver = peerConnection.addTransceiver('audio', {
+      direction: 'sendrecv',
+    });
+    const videoTransceiver = peerConnection.addTransceiver('video', {
+      direction: 'sendrecv',
+    });
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        const sender = peerConnection.addTrack(track, localStreamRef.current as MediaStream);
+    audioSenderRef.current = audioTransceiver.sender;
+    videoSenderRef.current = videoTransceiver.sender;
 
-        if (track.kind === 'audio') {
-          audioSenderRef.current = sender;
-        }
+    const localStream = localStreamRef.current;
+    const audioTrack = localStream?.getAudioTracks()[0] ?? null;
+    const videoTrack = localStream?.getVideoTracks()[0] ?? null;
 
-        if (track.kind === 'video') {
-          videoSenderRef.current = sender;
-        }
-      });
+    if (audioTrack) {
+      void audioSenderRef.current.replaceTrack(audioTrack);
+    }
+
+    if (videoTrack) {
+      void videoSenderRef.current.replaceTrack(videoTrack);
     }
 
     peerConnection.onicecandidate = (event) => {
@@ -466,16 +473,6 @@ export function useSessionWebRtc(): SessionWebRtcState {
         if (audioSenderRef.current.track !== liveAudioTrack) {
           await audioSenderRef.current.replaceTrack(liveAudioTrack);
         }
-      } else {
-        audioSenderRef.current = peerConnection.addTrack(liveAudioTrack, stream);
-
-        if (currentSessionId) {
-          if (currentUserRole === 'mentor') {
-            void maybeCreateOffer();
-          } else {
-            emitWebRtcReady(currentSessionId);
-          }
-        }
       }
     }
 
@@ -510,16 +507,6 @@ export function useSessionWebRtc(): SessionWebRtcState {
       if (videoSenderRef.current) {
         if (videoSenderRef.current.track !== liveVideoTrack) {
           await videoSenderRef.current.replaceTrack(liveVideoTrack);
-        }
-      } else {
-        videoSenderRef.current = peerConnection.addTrack(liveVideoTrack, stream);
-
-        if (currentSessionId) {
-          if (currentUserRole === 'mentor') {
-            void maybeCreateOffer();
-          } else {
-            emitWebRtcReady(currentSessionId);
-          }
         }
       }
     }

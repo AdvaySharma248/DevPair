@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { useRouter } from 'next/navigation';
 import { LeftPanel } from './left-panel';
 import { CodeEditor } from './code-editor';
 import { FloatingEditor } from './floating-editor';
@@ -211,11 +212,10 @@ function MobileBottomActions({
   );
 }
 
-function WorkspaceNav() {
+function WorkspaceNav({ onLeaveSession }: { onLeaveSession: () => void }) {
   const {
     user,
     currentSession,
-    leaveSession,
     chatVisible,
     videoVisible,
     toggleChat,
@@ -235,7 +235,7 @@ function WorkspaceNav() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={leaveSession}
+                onClick={onLeaveSession}
                 className="h-7 w-7 text-muted-foreground hover:bg-secondary hover:text-foreground"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -343,6 +343,7 @@ function WorkspaceNav() {
 }
 
 export function Workspace() {
+  const router = useRouter();
   const {
     chatVisible,
     videoVisible,
@@ -354,6 +355,11 @@ export function Workspace() {
     restoreEditor,
     editorFocused,
   } = useMentorshipStore();
+
+  const handleLeaveSession = useCallback(() => {
+    router.push('/');
+    leaveSession();
+  }, [leaveSession, router]);
 
   useSessionRealtime();
   const videoCall = useSessionWebRtc();
@@ -382,14 +388,14 @@ export function Workspace() {
 
       if (e.key === 'Escape') {
         e.preventDefault();
-        leaveSession();
+        handleLeaveSession();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
 
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleLeftPanel, leaveSession]);
+  }, [toggleLeftPanel, handleLeaveSession]);
 
   const showRightPanel = chatVisible || videoVisible;
   const showEditor = editorVisible && !editorMinimized;
@@ -397,7 +403,7 @@ export function Workspace() {
   if (isMobile) {
     return (
       <div className="flex h-screen flex-col overflow-hidden bg-background">
-        <WorkspaceNav />
+        <WorkspaceNav onLeaveSession={handleLeaveSession} />
 
         <main className="flex-1 overflow-hidden">
           <CodeEditor />
@@ -410,7 +416,10 @@ export function Workspace() {
 
         <Sheet open={isMobileLeftPanelOpen} onOpenChange={setIsMobileLeftPanelOpen}>
           <SheetContent side="left" className="w-72 border-border bg-card p-0">
-            <LeftPanel onCollapse={() => setIsMobileLeftPanelOpen(false)} />
+            <LeftPanel
+              onCollapse={() => setIsMobileLeftPanelOpen(false)}
+              onLeaveSession={handleLeaveSession}
+            />
           </SheetContent>
         </Sheet>
 
@@ -433,7 +442,7 @@ export function Workspace() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <WorkspaceNav />
+      <WorkspaceNav onLeaveSession={handleLeaveSession} />
 
       <div className="relative flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" className="h-full">
@@ -445,7 +454,10 @@ export function Workspace() {
                 maxSize={30}
                 className="bg-card"
               >
-                <LeftPanel onCollapse={toggleLeftPanel} />
+                <LeftPanel
+                  onCollapse={toggleLeftPanel}
+                  onLeaveSession={handleLeaveSession}
+                />
               </Panel>
               <ResizeHandle />
             </>

@@ -31,9 +31,10 @@ import {
 
 interface LeftPanelProps {
   onCollapse?: () => void;
+  onLeaveSession?: () => void;
 }
 
-export function LeftPanel({ onCollapse }: LeftPanelProps) {
+export function LeftPanel({ onCollapse, onLeaveSession }: LeftPanelProps) {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const {
     currentSession,
@@ -49,6 +50,15 @@ export function LeftPanel({ onCollapse }: LeftPanelProps) {
     editorMinimized,
     restoreEditor,
   } = useMentorshipStore();
+
+  const handleLeaveSession = () => {
+    if (onLeaveSession) {
+      onLeaveSession();
+      return;
+    }
+
+    leaveSession();
+  };
 
   if (leftPanelCollapsed) {
     return null;
@@ -73,7 +83,7 @@ export function LeftPanel({ onCollapse }: LeftPanelProps) {
         }
 
         endSession();
-        leaveSession();
+        handleLeaveSession();
         toast({
           title: 'Session ended successfully',
           type: 'success',
@@ -314,7 +324,7 @@ export function LeftPanel({ onCollapse }: LeftPanelProps) {
           variant="outline"
           size="sm"
           className="w-full h-8 border-border text-muted-foreground hover:text-foreground text-xs"
-          onClick={leaveSession}
+          onClick={handleLeaveSession}
         >
           <LogOut className="h-3.5 w-3.5 mr-2" />
           Leave Session

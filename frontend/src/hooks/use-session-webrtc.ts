@@ -70,19 +70,15 @@ function buildRemoteStream(event: RTCTrackEvent, existingStream: MediaStream | n
 }
 
 function mergeStreams(existingStream: MediaStream | null, extraStream: MediaStream) {
-  const nextStream = new MediaStream();
-
-  existingStream?.getTracks().forEach((track) => {
-    if (track.readyState === 'live') {
-      nextStream.addTrack(track);
-    }
-  });
+  if (!existingStream) {
+    return extraStream;
+  }
 
   extraStream.getTracks().forEach((track) => {
-    nextStream.addTrack(track);
+    existingStream.addTrack(track);
   });
 
-  return nextStream;
+  return existingStream;
 }
 
 function toSessionDescriptionInit(
@@ -768,7 +764,7 @@ export function useSessionWebRtc(): SessionWebRtcState {
   ]);
 
   useEffect(() => {
-    const syncDeviceState = async () => {
+    const syncMicrophoneState = async () => {
       if (!currentSessionId || !localStreamRef.current) {
         return;
       }
@@ -779,25 +775,41 @@ export function useSessionWebRtc(): SessionWebRtcState {
         } else {
           await ensureMicrophoneTrack();
         }
+      } catch (error) {
+        console.error('Failed to sync microphone state:', error);
+      }
+    };
 
+    void syncMicrophoneState();
+  }, [
+    currentSessionId,
+    ensureMicrophoneTrack,
+    isMuted,
+    releaseMicrophoneTrack,
+  ]);
+
+  useEffect(() => {
+    const syncCameraState = async () => {
+      if (!currentSessionId || !localStreamRef.current) {
+        return;
+      }
+
+      try {
         if (isCameraOff) {
           await releaseCameraTrack();
         } else {
           await ensureCameraTrack();
         }
       } catch (error) {
-        console.error('Failed to sync media device state:', error);
+        console.error('Failed to sync camera state:', error);
       }
     };
 
-    void syncDeviceState();
+    void syncCameraState();
   }, [
     currentSessionId,
     ensureCameraTrack,
-    ensureMicrophoneTrack,
     isCameraOff,
-    isMuted,
-    releaseMicrophoneTrack,
     releaseCameraTrack,
   ]);
 

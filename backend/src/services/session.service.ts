@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionStatus } from "@prisma/client";
+import { Prisma, SessionStatus } from "@prisma/client";
 import { db } from "../lib/db.ts";
 import { AppError } from "../lib/errors.ts";
 import {
@@ -48,6 +48,53 @@ const messageSchema = z.object({
   content: z.string().trim().min(1, "Message content is required").max(5000),
 });
 
+const sessionInclude = {
+  mentor: true,
+  student: true,
+} as const;
+
+const sessionIncludeWithDrafts = {
+  ...sessionInclude,
+  drafts: true,
+} as const;
+
+let hasWarnedAboutMissingSessionDraftTable = false;
+
+function isMissingSessionDraftTableError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2021" &&
+    error.message.includes("SessionDraft")
+  );
+}
+
+function logSessionDraftFallback() {
+  if (hasWarnedAboutMissingSessionDraftTable) {
+    return;
+  }
+
+  hasWarnedAboutMissingSessionDraftTable = true;
+  console.warn(
+    "SessionDraft table is unavailable in the connected database. Falling back to legacy session.code/session.language storage.",
+  );
+}
+
+async function withSessionDraftFallback<T>(
+  withDrafts: () => Promise<T>,
+  withoutDrafts: () => Promise<T>,
+) {
+  try {
+    return await withDrafts();
+  } catch (error) {
+    if (isMissingSessionDraftTableError(error)) {
+      logSessionDraftFallback();
+      return withoutDrafts();
+    }
+
+    throw error;
+  }
+}
+
 function resolveInitialLanguage(inputLanguage?: string | null, preferredLanguage?: string | null) {
   if (inputLanguage && supportedLanguages.includes(inputLanguage as SupportedLanguage)) {
     return inputLanguage as SupportedLanguage;
@@ -70,17 +117,24 @@ async function activateSessionIfDue<T extends { id: string; status: SessionStatu
     return session;
   }
 
-  return db.session.update({
-    where: { id: session.id },
-    data: {
-      status: SessionStatus.ACTIVE,
-    },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  return withSessionDraftFallback(
+    () =>
+      db.session.update({
+        where: { id: session.id },
+        data: {
+          status: SessionStatus.ACTIVE,
+        },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.update({
+        where: { id: session.id },
+        data: {
+          status: SessionStatus.ACTIVE,
+        },
+        include: sessionInclude,
+      }),
+  );
 }
 
 async function activateDueScheduledSessionsForUser(userId: string) {
@@ -99,14 +153,18 @@ async function activateDueScheduledSessionsForUser(userId: string) {
 }
 
 async function ensureParticipantAccess(sessionId: string, userId: string) {
-  const session = await db.session.findUnique({
-    where: { id: sessionId },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const session = await withSessionDraftFallback(
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionInclude,
+      }),
+  );
 
   if (!session) {
     throw new AppError("Session not found", 404);
@@ -123,25 +181,33 @@ async function ensureParticipantAccess(sessionId: string, userId: string) {
 }
 
 async function findSessionById(sessionId: string) {
-  return db.session.findUnique({
-    where: { id: sessionId },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  return withSessionDraftFallback(
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionInclude,
+      }),
+  );
 }
 
 async function findSessionByInviteCode(inviteCode: string) {
-  return db.session.findUnique({
-    where: { inviteCode },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  return withSessionDraftFallback(
+    () =>
+      db.session.findUnique({
+        where: { inviteCode },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.findUnique({
+        where: { inviteCode },
+        include: sessionInclude,
+      }),
+  );
 }
 
 function isParticipant(session: { mentorId: string; studentId: string | null }, userId: string) {
@@ -237,29 +303,37 @@ export async function createSessionForUser(user: ApiUser, input: unknown) {
     }
   }
 
-  const session = await db.session.create({
-    data: {
-      title: data.title,
-      mentorId: user.id,
-      studentId: providedStudentId,
-      inviteCode: await generateUniqueInviteCode(),
-      code: initialCode,
-      language: initialLanguage,
-      status: data.status.toUpperCase() as SessionStatus,
-      drafts: {
-        create: {
-          language: initialLanguage,
-          code: initialCode,
+  const createData = {
+    title: data.title,
+    mentorId: user.id,
+    studentId: providedStudentId,
+    inviteCode: await generateUniqueInviteCode(),
+    code: initialCode,
+    language: initialLanguage,
+    status: data.status.toUpperCase() as SessionStatus,
+    ...(data.createdAt ? { createdAt: data.createdAt } : {}),
+  };
+
+  const session = await withSessionDraftFallback(
+    () =>
+      db.session.create({
+        data: {
+          ...createData,
+          drafts: {
+            create: {
+              language: initialLanguage,
+              code: initialCode,
+            },
+          },
         },
-      },
-      ...(data.createdAt ? { createdAt: data.createdAt } : {}),
-    },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.create({
+        data: createData,
+        include: sessionInclude,
+      }),
+  );
 
   return serializeSession(session);
 }
@@ -292,14 +366,18 @@ export async function updateSessionForUser(
   }
 
   const data = updateSessionSchema.parse(input);
-  const sessionRecord = await db.session.findUnique({
-    where: { id: sessionId },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const sessionRecord = await withSessionDraftFallback(
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionInclude,
+      }),
+  );
 
   if (!sessionRecord) {
     throw new AppError("Session not found", 404);
@@ -315,18 +393,26 @@ export async function updateSessionForUser(
     throw new AppError("Only scheduled sessions can be edited", 400);
   }
 
-  const updatedSession = await db.session.update({
-    where: { id: sessionId },
-    data: {
-      ...(data.title !== undefined ? { title: data.title } : {}),
-      ...(data.createdAt !== undefined ? { createdAt: data.createdAt } : {}),
-    },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const updatedSession = await withSessionDraftFallback(
+    () =>
+      db.session.update({
+        where: { id: sessionId },
+        data: {
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.createdAt !== undefined ? { createdAt: data.createdAt } : {}),
+        },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.update({
+        where: { id: sessionId },
+        data: {
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.createdAt !== undefined ? { createdAt: data.createdAt } : {}),
+        },
+        include: sessionInclude,
+      }),
+  );
 
   return serializeSession(updatedSession);
 }
@@ -351,15 +437,20 @@ async function joinSessionRecordForUser(
     const updatedSession =
       session.status === SessionStatus.ACTIVE
         ? session
-        : await db.session.update({
-            where: { id: session.id },
-            data: { status: SessionStatus.ACTIVE },
-            include: {
-              mentor: true,
-              student: true,
-              drafts: true,
-            },
-          });
+        : await withSessionDraftFallback(
+            () =>
+              db.session.update({
+                where: { id: session.id },
+                data: { status: SessionStatus.ACTIVE },
+                include: sessionIncludeWithDrafts,
+              }),
+            () =>
+              db.session.update({
+                where: { id: session.id },
+                data: { status: SessionStatus.ACTIVE },
+                include: sessionInclude,
+              }),
+          );
 
     return serializeSession(updatedSession);
   }
@@ -368,18 +459,26 @@ async function joinSessionRecordForUser(
     throw new AppError("This session is already assigned to another student", 403);
   }
 
-  const updatedSession = await db.session.update({
-    where: { id: session.id },
-    data: {
-      studentId: user.id,
-      status: SessionStatus.ACTIVE,
-    },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const updatedSession = await withSessionDraftFallback(
+    () =>
+      db.session.update({
+        where: { id: session.id },
+        data: {
+          studentId: user.id,
+          status: SessionStatus.ACTIVE,
+        },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.update({
+        where: { id: session.id },
+        data: {
+          studentId: user.id,
+          status: SessionStatus.ACTIVE,
+        },
+        include: sessionInclude,
+      }),
+  );
 
   return serializeSession(updatedSession);
 }
@@ -408,14 +507,18 @@ export async function joinSession(user: ApiUser, sessionId: string, input: unkno
 }
 
 export async function endSessionForUser(sessionId: string, user: ApiUser) {
-  const session = await db.session.findUnique({
-    where: { id: sessionId },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const session = await withSessionDraftFallback(
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.findUnique({
+        where: { id: sessionId },
+        include: sessionInclude,
+      }),
+  );
 
   if (!session) {
     throw new AppError("Session not found", 404);
@@ -425,18 +528,26 @@ export async function endSessionForUser(sessionId: string, user: ApiUser) {
     throw new AppError("Only the mentor can end this session", 403);
   }
 
-  const updatedSession = await db.session.update({
-    where: { id: sessionId },
-    data: {
-      status: SessionStatus.ENDED,
-      endedAt: new Date(),
-    },
-    include: {
-      mentor: true,
-      student: true,
-      drafts: true,
-    },
-  });
+  const updatedSession = await withSessionDraftFallback(
+    () =>
+      db.session.update({
+        where: { id: sessionId },
+        data: {
+          status: SessionStatus.ENDED,
+          endedAt: new Date(),
+        },
+        include: sessionIncludeWithDrafts,
+      }),
+    () =>
+      db.session.update({
+        where: { id: sessionId },
+        data: {
+          status: SessionStatus.ENDED,
+          endedAt: new Date(),
+        },
+        include: sessionInclude,
+      }),
+  );
 
   return serializeSession(updatedSession);
 }
@@ -492,29 +603,44 @@ export async function upsertSessionDraftForUser(
 ) {
   await ensureParticipantAccess(sessionId, user.id);
 
-  await db.$transaction([
-    db.sessionDraft.upsert({
-      where: {
-        sessionId_language: {
+  try {
+    await db.$transaction([
+      db.sessionDraft.upsert({
+        where: {
+          sessionId_language: {
+            sessionId,
+            language,
+          },
+        },
+        create: {
           sessionId,
           language,
+          code,
         },
-      },
-      create: {
-        sessionId,
-        language,
-        code,
-      },
-      update: {
-        code,
-      },
-    }),
-    db.session.update({
+        update: {
+          code,
+        },
+      }),
+      db.session.update({
+        where: { id: sessionId },
+        data: {
+          code,
+          language,
+        },
+      }),
+    ]);
+  } catch (error) {
+    if (!isMissingSessionDraftTableError(error)) {
+      throw error;
+    }
+
+    logSessionDraftFallback();
+    await db.session.update({
       where: { id: sessionId },
       data: {
         code,
         language,
       },
-    }),
-  ]);
+    });
+  }
 }

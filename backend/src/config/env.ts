@@ -31,7 +31,8 @@ if (!parsedEnv.success) {
 export const env = {
   ...parsedEnv.data,
   isProduction: parsedEnv.data.NODE_ENV === "production",
-  judge0BaseUrl: parsedEnv.data.JUDGE0_BASE_URL?.replace(/\/+$/, "") ?? null,
+  judge0BaseUrl:
+    parsedEnv.data.JUDGE0_BASE_URL?.replace(/\/+$/, "") ?? "https://ce.judge0.com",
   judge0ApiKeyHeader:
     parsedEnv.data.JUDGE0_API_KEY_HEADER?.trim() || "X-Auth-Token",
   allowedCorsOrigins: parsedEnv.data.CORS_ORIGIN.split(",")

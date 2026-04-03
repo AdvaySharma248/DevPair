@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Editor, { BeforeMount, OnMount } from '@monaco-editor/react';
-import { useMentorshipStore } from '@/store/mentorship-store';
+import { useMentorshipStore, type ExecutionResult } from '@/store/mentorship-store';
 import {
   Select,
   SelectContent,
@@ -19,10 +19,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { 
-  Play, 
-  ChevronUp, 
-  ChevronDown, 
+import {
+  Play,
+  ChevronUp,
+  ChevronDown,
   Trash2,
   Clock,
   Cpu,
@@ -34,15 +34,18 @@ import {
   Maximize2,
   Copy,
   Download,
-  RotateCcw
+  RotateCcw,
 } from 'lucide-react';
 import { editor } from 'monaco-editor';
 import { cn } from '@/lib/utils';
-import { getDefaultCode } from '@/lib/default-code';
+import { getDefaultCode, isSupportedLanguage, type SupportedLanguage } from '@/lib/default-code';
 import { registerEditorSnippets } from '@/lib/monaco-snippets';
-import { emitRealtimeCodeChange } from '@/lib/devpair-socket';
+import {
+  emitRealtimeCodeChange,
+  emitRealtimeExecutionResult,
+} from '@/lib/devpair-socket';
 
-const LANGUAGES = [
+const LANGUAGES: Array<{ value: SupportedLanguage; label: string }> = [
   { value: 'javascript', label: 'JavaScript' },
   { value: 'typescript', label: 'TypeScript' },
   { value: 'python', label: 'Python' },
@@ -50,52 +53,71 @@ const LANGUAGES = [
   { value: 'cpp', label: 'C++' },
 ];
 
-// Output Panel Component
+function isExecutionSuccess(result: ExecutionResult | null | undefined) {
+  return !!result && (result.statusCode === 3 || result.status === 'Accepted');
+}
+
+function buildExecutionErrorResult(message: string, statusCode = 500): ExecutionResult {
+  return {
+    stdout: '',
+    stderr: message,
+    compileOutput: '',
+    status: 'Error',
+    statusCode,
+    time: 'N/A',
+    memory: 'N/A',
+  };
+}
+
 function OutputPanel() {
-  const { 
+  const {
     stdin,
     setStdin,
-    executionResult, 
-    isRunning, 
-    outputPanelOpen, 
-    toggleOutputPanel, 
-    clearExecutionResult 
+    executionResult,
+    isRunning,
+    outputPanelOpen,
+    toggleOutputPanel,
+    clearExecutionResult,
   } = useMentorshipStore();
   const [outputHeight, setOutputHeight] = useState(220);
   const [isResizing, setIsResizing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'input' | 'output'>('input');
-  
-  // Use refs to track values during resize without causing re-renders
+  const [activeTab, setActiveTab] = useState<'input' | 'output' | 'error'>('input');
+
   const resizeStartY = useRef(0);
   const currentHeightRef = useRef(220);
-  
-  // Keep ref in sync with state
+
   useEffect(() => {
     currentHeightRef.current = outputHeight;
   }, [outputHeight]);
 
   useEffect(() => {
-    if (isRunning || executionResult) {
+    if (isRunning) {
       const timeoutId = window.setTimeout(() => {
         setActiveTab('output');
       }, 0);
 
       return () => window.clearTimeout(timeoutId);
     }
+
+    if (executionResult) {
+      const timeoutId = window.setTimeout(() => {
+        setActiveTab(isExecutionSuccess(executionResult) ? 'output' : 'error');
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
   }, [executionResult, isRunning]);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleResizeStart = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
     setIsResizing(true);
-    resizeStartY.current = e.clientY;
-    // Capture current height from ref (always up-to-date)
+    resizeStartY.current = event.clientY;
 
     const startHeight = currentHeightRef.current;
 
-    const onMouseMove = (e: MouseEvent) => {
-      // Use requestAnimationFrame for smooth updates
+    const onMouseMove = (nextEvent: MouseEvent) => {
       requestAnimationFrame(() => {
-        const delta = resizeStartY.current - e.clientY;
+        const delta = resizeStartY.current - nextEvent.clientY;
         const newHeight = Math.max(180, Math.min(520, startHeight + delta));
         setOutputHeight(newHeight);
       });
@@ -109,66 +131,69 @@ function OutputPanel() {
       document.body.style.userSelect = '';
     };
 
-    // Prevent text selection during resize
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, []); // Empty deps - we use refs for all values needed during resize
+  }, []);
 
   const getStatusIcon = () => {
     if (activeTab === 'input') {
       return <Terminal className="w-3 h-3 text-muted-foreground" />;
     }
+
     if (isRunning) {
       return <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />;
     }
+
     if (!executionResult) {
       return <Terminal className="w-3 h-3 text-muted-foreground" />;
     }
-    if (executionResult.statusCode === 3 || executionResult.status === 'Accepted') {
+
+    if (isExecutionSuccess(executionResult)) {
       return <CheckCircle className="w-3 h-3 text-[#24b39b]" />;
     }
+
     return <AlertCircle className="w-3 h-3 text-red-500" />;
   };
 
   const getStatusColor = () => {
-    if (!executionResult) return 'text-muted-foreground';
-    if (executionResult.statusCode === 3 || executionResult.status === 'Accepted') {
-      return 'text-[#24b39b]';
+    if (!executionResult) {
+      return 'text-muted-foreground';
     }
-    return 'text-red-500';
+
+    return isExecutionSuccess(executionResult) ? 'text-[#24b39b]' : 'text-red-500';
   };
 
   return (
-    <div 
+    <div
       className={cn(
-        "border-t border-border bg-[#111111] transition-all duration-200",
-        outputPanelOpen ? "" : "h-8"
+        'border-t border-border bg-[#111111] transition-all duration-200',
+        outputPanelOpen ? '' : 'h-8',
       )}
       style={{ height: outputPanelOpen ? outputHeight : 32 }}
       suppressHydrationWarning
     >
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as 'input' | 'output')}
+        onValueChange={(value) => setActiveTab(value as 'input' | 'output' | 'error')}
         className="h-full gap-0"
       >
-        {outputPanelOpen && (
+        {outputPanelOpen ? (
           <div
             className={cn(
-              "h-1 w-full cursor-row-resize hover:bg-primary/20 transition-colors",
-              isResizing && "bg-primary/30"
+              'h-1 w-full cursor-row-resize hover:bg-primary/20 transition-colors',
+              isResizing && 'bg-primary/30',
             )}
             onMouseDown={handleResizeStart}
           />
-        )}
+        ) : null}
 
         <div className="flex items-center justify-between border-b border-border bg-[#1a1a1a] px-3 h-8">
           <div className="flex items-center gap-2">
             {getStatusIcon()}
             <span className="text-[11px] font-medium text-foreground">Console</span>
-            {outputPanelOpen && (
+            {outputPanelOpen ? (
               <TabsList className="h-6 rounded-md bg-[#111111] p-0.5">
                 <TabsTrigger value="input" className="h-5 px-2 text-[10px]">
                   Input
@@ -176,16 +201,19 @@ function OutputPanel() {
                 <TabsTrigger value="output" className="h-5 px-2 text-[10px]">
                   Output
                 </TabsTrigger>
+                <TabsTrigger value="error" className="h-5 px-2 text-[10px]">
+                  Error
+                </TabsTrigger>
               </TabsList>
-            )}
-            {activeTab === 'output' && executionResult && (
-              <span className={cn("text-[10px] font-medium", getStatusColor())}>
+            ) : null}
+            {activeTab !== 'input' && executionResult ? (
+              <span className={cn('text-[10px] font-medium', getStatusColor())}>
                 {executionResult.status}
               </span>
-            )}
+            ) : null}
           </div>
           <div className="flex items-center gap-1">
-            {activeTab === 'output' && executionResult && (
+            {activeTab !== 'input' && executionResult ? (
               <>
                 <div className="mr-2 flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Clock className="w-3 h-3" />
@@ -209,8 +237,8 @@ function OutputPanel() {
                   </Tooltip>
                 </TooltipProvider>
               </>
-            )}
-            {activeTab === 'input' && outputPanelOpen && (
+            ) : null}
+            {activeTab === 'input' && outputPanelOpen ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -220,7 +248,7 @@ function OutputPanel() {
               >
                 Clear Input
               </Button>
-            )}
+            ) : null}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -243,7 +271,7 @@ function OutputPanel() {
           </div>
         </div>
 
-        {outputPanelOpen && (
+        {outputPanelOpen ? (
           <div
             className="font-mono text-[12px] leading-relaxed"
             style={{ height: outputHeight - 32 - 4 }}
@@ -276,16 +304,32 @@ function OutputPanel() {
                     <span>Running...</span>
                   </div>
                 ) : executionResult ? (
+                  executionResult.stdout ? (
+                    <pre className="text-[#e6edf3] whitespace-pre-wrap break-words">
+                      {executionResult.stdout}
+                    </pre>
+                  ) : (
+                    <span className="text-muted-foreground italic">No output</span>
+                  )
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+                    <Terminal className="mb-2 h-6 w-6 opacity-50" />
+                    <span className="text-xs">Run your code to see stdout here.</span>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="error" className="mt-0 h-full">
+              <div className="h-full overflow-auto p-3">
+                {isRunning ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span>Running...</span>
+                  </div>
+                ) : executionResult ? (
                   <div className="space-y-2">
-                    {executionResult.stdout && (
-                      <div>
-                        <pre className="text-[#e6edf3] whitespace-pre-wrap break-words">
-                          {executionResult.stdout}
-                        </pre>
-                      </div>
-                    )}
-                    
-                    {executionResult.compileOutput && (
+                    {executionResult.compileOutput ? (
                       <div>
                         <div className="mb-1 flex items-center gap-1 text-[10px] text-yellow-500">
                           <AlertCircle className="w-3 h-3" />
@@ -295,9 +339,9 @@ function OutputPanel() {
                           {executionResult.compileOutput}
                         </pre>
                       </div>
-                    )}
-                    
-                    {executionResult.stderr && (
+                    ) : null}
+
+                    {executionResult.stderr ? (
                       <div>
                         <div className="mb-1 flex items-center gap-1 text-[10px] text-red-500">
                           <AlertCircle className="w-3 h-3" />
@@ -307,22 +351,22 @@ function OutputPanel() {
                           {executionResult.stderr}
                         </pre>
                       </div>
-                    )}
+                    ) : null}
 
-                    {!executionResult.stdout && !executionResult.stderr && !executionResult.compileOutput && (
-                      <span className="text-muted-foreground italic">No output</span>
-                    )}
+                    {!executionResult.stderr && !executionResult.compileOutput ? (
+                      <span className="text-muted-foreground italic">No errors</span>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
                     <Terminal className="mb-2 h-6 w-6 opacity-50" />
-                    <span className="text-xs">Open the Input tab, type your stdin, then click Run.</span>
+                    <span className="text-xs">Compile and runtime errors will appear here.</span>
                   </div>
                 )}
               </div>
             </TabsContent>
           </div>
-        )}
+        ) : null}
       </Tabs>
     </div>
   );
@@ -332,6 +376,7 @@ export function CodeEditor() {
   const {
     currentSession,
     code,
+    drafts,
     language,
     remoteCodeSyncVersion,
     setCode,
@@ -362,22 +407,24 @@ export function CodeEditor() {
     };
   }, []);
 
-  const queueCodeSync = useCallback((nextCode: string, nextLanguage: string) => {
-    if (!currentSessionId) {
-      return;
-    }
+  const queueCodeSync = useCallback(
+    (nextCode: string, nextLanguage: SupportedLanguage) => {
+      if (!currentSessionId) {
+        return;
+      }
 
-    if (codeSyncTimeoutRef.current) {
-      clearTimeout(codeSyncTimeoutRef.current);
-    }
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
 
-    codeSyncTimeoutRef.current = setTimeout(() => {
-      emitRealtimeCodeChange(currentSessionId, nextCode, nextLanguage);
-    }, 200);
-  }, [currentSessionId]);
+      codeSyncTimeoutRef.current = setTimeout(() => {
+        emitRealtimeCodeChange(currentSessionId, nextCode, nextLanguage);
+      }, 200);
+    },
+    [currentSessionId],
+  );
 
   const handleEditorWillMount: BeforeMount = (monaco) => {
-    // Define custom dark theme matching LeetCode/GitHub
     monaco.editor.defineTheme('devpair-dark', {
       base: 'vs-dark',
       inherit: true,
@@ -406,10 +453,8 @@ export function CodeEditor() {
         'editorWhitespace.foreground': '#303030',
         'editorBracketMatch.background': '#f5a62318',
         'editorBracketMatch.border': '#f5a623',
-        // Minimap
         'minimap.background': '#111111',
         'minimap.selectionHighlight': '#3a3a3a80',
-        // Scrollbar
         'scrollbarSlider.background': '#56565633',
         'scrollbarSlider.hoverBackground': '#6a6a6a55',
         'scrollbarSlider.activeBackground': '#80808077',
@@ -419,57 +464,69 @@ export function CodeEditor() {
     registerEditorSnippets(monaco);
   };
 
-  const handleEditorDidMount: OnMount = (editor) => {
-    editorRef.current = editor;
-    editor.focus();
+  const handleEditorDidMount: OnMount = (mountedEditor) => {
+    editorRef.current = mountedEditor;
+    mountedEditor.focus();
   };
 
-  const handleLanguageChange = useCallback((newLanguage: string) => {
-    setLanguage(newLanguage);
-    queueCodeSync(code, newLanguage);
-  }, [code, queueCodeSync, setLanguage]);
+  const handleLanguageChange = useCallback(
+    (nextLanguageValue: string) => {
+      const nextLanguage = isSupportedLanguage(nextLanguageValue)
+        ? nextLanguageValue
+        : 'javascript';
+      const nextCode = drafts[nextLanguage] ?? getDefaultCode(nextLanguage);
 
-  const handleEditorChange = useCallback((value?: string) => {
-    const nextCode = value || '';
+      setLanguage(nextLanguage);
+      queueCodeSync(nextCode, nextLanguage);
+    },
+    [drafts, queueCodeSync, setLanguage],
+  );
 
-    if (
-      suppressRemoteCodeRef.current !== null &&
-      nextCode === suppressRemoteCodeRef.current
-    ) {
-      suppressRemoteCodeRef.current = null;
-      return;
-    }
+  const handleEditorChange = useCallback(
+    (value?: string) => {
+      const nextCode = value || '';
 
-    setCode(nextCode);
-    queueCodeSync(nextCode, language);
-  }, [language, queueCodeSync, setCode]);
+      if (
+        suppressRemoteCodeRef.current !== null &&
+        nextCode === suppressRemoteCodeRef.current
+      ) {
+        suppressRemoteCodeRef.current = null;
+        return;
+      }
+
+      setCode(nextCode);
+      queueCodeSync(nextCode, language);
+    },
+    [language, queueCodeSync, setCode],
+  );
 
   const copyCode = useCallback(() => {
     if (editorRef.current) {
-      const codeValue = editorRef.current.getValue();
-      navigator.clipboard.writeText(codeValue);
+      void navigator.clipboard.writeText(editorRef.current.getValue());
     }
   }, []);
 
   const downloadCode = useCallback(() => {
-    if (editorRef.current) {
-      const codeValue = editorRef.current.getValue();
-      const extensions: Record<string, string> = {
-        javascript: 'js',
-        typescript: 'ts',
-        python: 'py',
-        java: 'java',
-        cpp: 'cpp',
-      };
-      const ext = extensions[language] || 'txt';
-      const blob = new Blob([codeValue], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `solution.${ext}`;
-      a.click();
-      URL.revokeObjectURL(url);
+    if (!editorRef.current) {
+      return;
     }
+
+    const codeValue = editorRef.current.getValue();
+    const extensions: Record<SupportedLanguage, string> = {
+      javascript: 'js',
+      typescript: 'ts',
+      python: 'py',
+      java: 'java',
+      cpp: 'cpp',
+    };
+    const ext = extensions[language];
+    const blob = new Blob([codeValue], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `solution.${ext}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }, [language]);
 
   const resetCode = useCallback(() => {
@@ -479,15 +536,19 @@ export function CodeEditor() {
   }, [language, queueCodeSync, setCode]);
 
   const runCode = useCallback(async () => {
-    if (isRunning || !editorRef.current) return;
+    if (isRunning || !editorRef.current) {
+      return;
+    }
 
     const codeValue = editorRef.current.getValue();
-    if (!codeValue.trim()) return;
+
+    if (!codeValue.trim()) {
+      return;
+    }
 
     setIsRunning(true);
 
     try {
-      // Call the frontend API route which proxies to the backend code execution service
       const response = await fetch('/api/run-code', {
         method: 'POST',
         headers: {
@@ -495,35 +556,54 @@ export function CodeEditor() {
         },
         body: JSON.stringify({
           code: codeValue,
-          language: language,
+          language,
           stdin,
         }),
       });
 
-      const result = await response.json();
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const message =
+          payload &&
+          typeof payload === 'object' &&
+          'error' in payload &&
+          typeof payload.error === 'string'
+            ? payload.error
+            : 'Failed to execute code. Please try again.';
+        throw buildExecutionErrorResult(message, response.status);
+      }
+
+      const result = payload as ExecutionResult;
       setExecutionResult(result);
+
+      if (currentSessionId) {
+        emitRealtimeExecutionResult(currentSessionId, result);
+      }
     } catch (error) {
       console.error('Run code error:', error);
-      setExecutionResult({
-        stdout: '',
-        stderr: 'Failed to execute code. Please try again.',
-        compileOutput: '',
-        status: 'Error',
-        statusCode: 6,
-        time: '0ms',
-        memory: '0 KB',
-      });
+      const fallbackResult =
+        error &&
+        typeof error === 'object' &&
+        'status' in error &&
+        'statusCode' in error
+          ? (error as ExecutionResult)
+          : buildExecutionErrorResult('Failed to execute code. Please try again.');
+      setExecutionResult(fallbackResult);
+
+      if (currentSessionId) {
+        emitRealtimeExecutionResult(currentSessionId, fallbackResult);
+      }
     } finally {
       setIsRunning(false);
     }
-  }, [isRunning, language, setExecutionResult, setIsRunning, stdin]);
+  }, [currentSessionId, isRunning, language, setExecutionResult, setIsRunning, stdin]);
 
-  // Keyboard shortcut for running code (Cmd/Ctrl + Enter)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        runCode();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        void runCode();
       }
     };
 
@@ -533,15 +613,12 @@ export function CodeEditor() {
 
   return (
     <div className="flex flex-col h-full bg-card border border-border rounded overflow-hidden">
-      {/* Editor Header */}
       <div
         className="flex items-center justify-between px-2 py-1.5 border-b border-border bg-card shrink-0 select-none"
         onDoubleClick={toggleEditorFocus}
       >
         <div className="flex items-center gap-2">
-          {/* macOS-style window controls */}
           <div className="flex items-center gap-1.5">
-            {/* Close - Red */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -558,7 +635,6 @@ export function CodeEditor() {
               </Tooltip>
             </TooltipProvider>
 
-            {/* Minimize - Yellow */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -575,15 +651,14 @@ export function CodeEditor() {
               </Tooltip>
             </TooltipProvider>
 
-            {/* Expand - Green */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={toggleEditorFocus}
                     className={cn(
-                      "w-3 h-3 rounded-full transition-colors flex items-center justify-center group",
-                      editorFocused ? "bg-[#f0c56b]" : "bg-[#f0c56b] hover:bg-[#f4cf83]"
+                      'w-3 h-3 rounded-full transition-colors flex items-center justify-center group',
+                      editorFocused ? 'bg-[#f0c56b]' : 'bg-[#f0c56b] hover:bg-[#f4cf83]',
                     )}
                   >
                     <Maximize2 className="w-1.5 h-1.5 text-[#1b1610] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -603,17 +678,16 @@ export function CodeEditor() {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {/* Run Button */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={runCode}
+                  onClick={() => void runCode()}
                   disabled={isRunning}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all",
-                    "bg-[#f5a623] hover:bg-[#ffb53d] text-[#1b1610]",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                    'flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all',
+                    'bg-[#f5a623] hover:bg-[#ffb53d] text-[#1b1610]',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
                 >
                   {isRunning ? (
@@ -679,13 +753,12 @@ export function CodeEditor() {
               onClick={resetCode}
               title="Reset code"
             >
-              <RotateCcw className="h-3 h-3 w-3" />
+              <RotateCcw className="h-3 w-3" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Monaco Editor */}
       <div className="flex-1 min-h-0">
         <Editor
           height="100%"
@@ -736,7 +809,6 @@ export function CodeEditor() {
         />
       </div>
 
-      {/* Output Panel */}
       <OutputPanel />
     </div>
   );

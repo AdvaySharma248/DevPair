@@ -20,7 +20,7 @@ import {
 import { Copy, Download, RotateCcw, Maximize2, X, GripHorizontal } from 'lucide-react';
 import { editor } from 'monaco-editor';
 import { cn } from '@/lib/utils';
-import { getDefaultCode } from '@/lib/default-code';
+import { getDefaultCode, isSupportedLanguage, type SupportedLanguage } from '@/lib/default-code';
 import { registerEditorSnippets } from '@/lib/monaco-snippets';
 import { emitRealtimeCodeChange } from '@/lib/devpair-socket';
 
@@ -38,7 +38,7 @@ const RESIZE_CURSOR_MAP: Record<string, string> = {
   se: 'nwse-resize',
 };
 
-const LANGUAGES = [
+const LANGUAGES: Array<{ value: SupportedLanguage; label: string }> = [
   { value: 'javascript', label: 'JavaScript' },
   { value: 'typescript', label: 'TypeScript' },
   { value: 'python', label: 'Python' },
@@ -62,6 +62,7 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
   const {
     currentSession,
     code,
+    drafts,
     language,
     remoteCodeSyncVersion,
     setCode,
@@ -96,7 +97,7 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
     };
   }, []);
 
-  const queueCodeSync = useCallback((nextCode: string, nextLanguage: string) => {
+  const queueCodeSync = useCallback((nextCode: string, nextLanguage: SupportedLanguage) => {
     if (!currentSessionId) {
       return;
     }
@@ -347,9 +348,12 @@ export function FloatingEditor({ onClose, onExpand }: FloatingEditorProps) {
   }, [language, queueCodeSync, setCode]);
 
   const handleLanguageChange = useCallback((newLanguage: string) => {
-    setLanguage(newLanguage);
-    queueCodeSync(code, newLanguage);
-  }, [code, queueCodeSync, setLanguage]);
+    const nextLanguage = isSupportedLanguage(newLanguage) ? newLanguage : 'javascript';
+    const nextCode = drafts[nextLanguage] ?? getDefaultCode(nextLanguage);
+
+    setLanguage(nextLanguage);
+    queueCodeSync(nextCode, nextLanguage);
+  }, [drafts, queueCodeSync, setLanguage]);
 
   return (
     <div

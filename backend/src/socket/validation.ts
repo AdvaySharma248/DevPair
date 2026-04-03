@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { supportedLanguages } from "../lib/languages.ts";
 
 const sessionPayloadSchema = z.object({
   sessionId: z.string().trim().min(1, "sessionId is required").max(191),
@@ -14,10 +15,22 @@ const sendMessagePayloadSchema = sessionPayloadSchema.extend({
 
 const codeChangePayloadSchema = sessionPayloadSchema.extend({
   code: z.string().max(200_000, "Code payload is too large"),
-  language: z
-    .enum(["javascript", "typescript", "python", "java", "cpp"])
-    .optional()
-    .default("javascript"),
+  language: z.enum(supportedLanguages).optional().default("javascript"),
+});
+
+const executionResultPayloadSchema = z.object({
+  stdout: z.string().max(200_000).default(""),
+  stderr: z.string().max(200_000).default(""),
+  compileOutput: z.string().max(200_000).default(""),
+  status: z.string().trim().min(1).max(128),
+  statusCode: z.number().int(),
+  time: z.string().trim().min(1).max(64),
+  memory: z.string().trim().min(1).max(64),
+  simulated: z.boolean().optional(),
+});
+
+const executionResultEventPayloadSchema = sessionPayloadSchema.extend({
+  result: executionResultPayloadSchema,
 });
 
 const webRtcSessionDescriptionSchema = z
@@ -51,6 +64,7 @@ const webRtcIceCandidatePayloadSchema = sessionPayloadSchema.extend({
 export type SessionEventPayload = z.infer<typeof sessionPayloadSchema>;
 export type SendMessageEventPayload = z.infer<typeof sendMessagePayloadSchema>;
 export type CodeChangeEventPayload = z.infer<typeof codeChangePayloadSchema>;
+export type ExecutionResultEventPayload = z.infer<typeof executionResultEventPayloadSchema>;
 export type WebRtcOfferEventPayload = z.infer<typeof webRtcOfferPayloadSchema>;
 export type WebRtcAnswerEventPayload = z.infer<typeof webRtcAnswerPayloadSchema>;
 export type WebRtcIceCandidateEventPayload = z.infer<
@@ -67,6 +81,10 @@ export function parseSendMessageEventPayload(input: unknown) {
 
 export function parseCodeChangeEventPayload(input: unknown) {
   return codeChangePayloadSchema.parse(input);
+}
+
+export function parseExecutionResultEventPayload(input: unknown) {
+  return executionResultEventPayloadSchema.parse(input);
 }
 
 export function parseWebRtcOfferEventPayload(input: unknown) {

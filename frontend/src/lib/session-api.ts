@@ -1,4 +1,5 @@
 import type { Message, Session } from '@/store/mentorship-store';
+import type { SupportedLanguage } from './default-code';
 
 export interface ApiSessionRecord {
   id: string;
@@ -12,6 +13,7 @@ export interface ApiSessionRecord {
   code?: string | null;
   language?: string | null;
   inviteCode?: string | null;
+  drafts?: Partial<Record<SupportedLanguage, string>> | null;
 }
 
 export interface ApiMessageRecord {
@@ -36,6 +38,7 @@ export function mapApiSession(session: ApiSessionRecord): Session {
     code: session.code ?? null,
     language: session.language ?? null,
     inviteCode: session.inviteCode ?? null,
+    drafts: session.drafts ?? null,
   };
 }
 

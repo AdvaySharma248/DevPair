@@ -374,18 +374,18 @@ function QuickActionsToolbar() {
   };
 
   return (
-    <div className="flex items-center gap-4 px-6 py-4 border-y border-border bg-secondary/10">
+    <div className="flex flex-col items-start gap-3 border-y border-border bg-secondary/10 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
       <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Quick Actions</span>
       
-      <div className="h-4 w-px bg-border" />
+      <div className="hidden h-4 w-px bg-border sm:block" />
       
       {isMentor ? (
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button
                 size="sm"
-                className="h-8 bg-primary text-primary-foreground hover:bg-primary/90 text-xs px-4"
+                className="h-8 w-full bg-primary px-4 text-xs text-primary-foreground hover:bg-primary/90 sm:w-auto"
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Create Session
@@ -434,7 +434,7 @@ function QuickActionsToolbar() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 border-border text-muted-foreground hover:text-foreground hover:bg-secondary/50 text-xs px-4"
+                className="h-8 w-full border-border px-4 text-xs text-muted-foreground hover:bg-secondary/50 hover:text-foreground sm:w-auto"
               >
                 <Calendar className="h-3.5 w-3.5 mr-1.5" />
                 Schedule
@@ -503,12 +503,12 @@ function QuickActionsToolbar() {
           </Dialog>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center gap-3 sm:w-auto">
           <Dialog open={isJoinOpen} onOpenChange={setIsJoinOpen}>
             <DialogTrigger asChild>
               <Button 
                 size="sm" 
-                className="h-8 bg-primary text-primary-foreground hover:bg-primary/90 text-xs px-4"
+                className="h-8 w-full bg-primary px-4 text-xs text-primary-foreground hover:bg-primary/90 sm:w-auto"
               >
                 <Link2 className="h-3.5 w-3.5 mr-1.5" />
                 Join via Code
@@ -568,7 +568,8 @@ function QuickActionsToolbar() {
 
 // Sessions Table
 function SessionsTable() {
-  const { sessions, user, joinSession, updateSession } = useMentorshipStore();
+  const { sessions, user, updateSession } = useMentorshipStore();
+  const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'active' | 'scheduled' | 'ended'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -756,9 +757,9 @@ function SessionsTable() {
   return (
     <div className="flex flex-col px-6 py-5">
       {/* Section Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-sm font-semibold text-foreground">Your Sessions</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           {/* Search */}
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -766,12 +767,12 @@ function SessionsTable() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search sessions..."
-              className="h-8 w-44 pl-9 bg-secondary/50 border-border text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50"
+              className="h-8 w-full pl-9 bg-secondary/50 border-border text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 sm:w-44"
             />
           </div>
 
           {/* Filters */}
-          <div className="flex items-center border border-border rounded-md overflow-hidden">
+          <div className="flex w-full items-center overflow-x-auto rounded-md border border-border sm:w-auto">
             {(['all', 'active', 'scheduled', 'ended'] as const).map((f) => (
               <button
                 key={f}
@@ -807,9 +808,9 @@ function SessionsTable() {
             {filteredSessions.map((session) => (
               <div
                 key={session.id}
-                onClick={() => session.status === 'active' && joinSession(session)}
+                onClick={() => session.status === 'active' && router.push(`/session/${session.id}`)}
                 className={cn(
-                  "group flex items-center gap-4 px-4 h-14 transition-all",
+                  "group flex flex-col items-start gap-3 px-4 py-4 transition-all sm:h-14 sm:flex-row sm:items-center sm:gap-4 sm:py-0",
                   session.status === 'active' ? "cursor-pointer" : "",
                   "hover:bg-secondary/30 relative",
                   "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary before:opacity-0 hover:before:opacity-100 before:transition-opacity"
@@ -837,12 +838,13 @@ function SessionsTable() {
                 </div>
 
                 {/* Status Badge - fixed width */}
-                <div className="shrink-0">
-                  {getStatusBadge(session.status)}
-                </div>
+                <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:justify-end">
+                  <div className="shrink-0">
+                    {getStatusBadge(session.status)}
+                  </div>
 
                 {/* Actions - flex container with gap */}
-                <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 opacity-100 transition-opacity sm:flex-nowrap sm:opacity-0 sm:group-hover:opacity-100">
                   {/* Copy Link - Only for mentors on active/scheduled sessions */}
                   {isMentor && (session.status === 'active' || session.status === 'scheduled') && (
                     <TooltipProvider>
@@ -907,7 +909,7 @@ function SessionsTable() {
                       className="h-8 min-w-[72px] px-4 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        joinSession(session);
+                        router.push(`/session/${session.id}`);
                       }}
                     >
                       <Play className="h-3 w-3 mr-1.5" />
@@ -949,6 +951,7 @@ function SessionsTable() {
                       </Button>
                     </>
                   )}
+                </div>
                 </div>
               </div>
             ))}

@@ -23,6 +23,14 @@ int main() {
 }`,
 };
 
+export type SupportedLanguage = keyof typeof DEFAULT_CODE;
+
+const SUPPORTED_LANGUAGES = Object.keys(DEFAULT_CODE) as SupportedLanguage[];
+
+export function isSupportedLanguage(language?: string | null): language is SupportedLanguage {
+  return !!language && SUPPORTED_LANGUAGES.includes(language as SupportedLanguage);
+}
+
 export function getDefaultCode(language?: string) {
   if (!language) {
     return EMPTY_CODE;

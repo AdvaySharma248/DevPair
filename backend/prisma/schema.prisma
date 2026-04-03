@@ -63,10 +63,24 @@ model Session {
   mentor     User          @relation("MentorSessions", fields: [mentorId], references: [id], onDelete: Cascade)
   student    User?         @relation("StudentSessions", fields: [studentId], references: [id], onDelete: SetNull)
   messages   Message[]
+  drafts     SessionDraft[]
 
   @@index([mentorId])
   @@index([studentId])
   @@index([status])
+}
+
+model SessionDraft {
+  id        String   @id @default(cuid())
+  sessionId String
+  language  String
+  code      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, language])
+  @@index([sessionId])
 }
 
 model Message {

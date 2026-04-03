@@ -15,6 +15,7 @@ export function useSessionRealtime() {
   const userId = useMentorshipStore((state) => state.user?.id);
   const addMessage = useMentorshipStore((state) => state.addMessage);
   const applyRemoteCodeUpdate = useMentorshipStore((state) => state.applyRemoteCodeUpdate);
+  const setExecutionResult = useMentorshipStore((state) => state.setExecutionResult);
   const setMessages = useMentorshipStore((state) => state.setMessages);
 
   useEffect(() => {
@@ -76,6 +77,19 @@ export function useSessionRealtime() {
       applyRemoteCodeUpdate(payload.code, payload.language);
     };
 
+    const handleExecutionResult = (payload: {
+      sessionId: string;
+      result: Parameters<typeof setExecutionResult>[0];
+    }) => {
+      const state = useMentorshipStore.getState();
+
+      if (state.currentSession?.id !== currentSessionId || payload.sessionId !== currentSessionId) {
+        return;
+      }
+
+      setExecutionResult(payload.result);
+    };
+
     const handleUserJoined = (payload: { sessionId: string; userId: string }) => {
       const state = useMentorshipStore.getState();
 
@@ -97,6 +111,7 @@ export function useSessionRealtime() {
     socket.on('connect', handleConnect);
     socket.on('receive-message', handleReceiveMessage);
     socket.on('code-update', handleCodeUpdate);
+    socket.on('execution-result', handleExecutionResult);
     socket.on('user-joined', handleUserJoined);
 
     if (socket.connected) {
@@ -110,8 +125,9 @@ export function useSessionRealtime() {
       socket.off('connect', handleConnect);
       socket.off('receive-message', handleReceiveMessage);
       socket.off('code-update', handleCodeUpdate);
+      socket.off('execution-result', handleExecutionResult);
       socket.off('user-joined', handleUserJoined);
       disconnectDevPairSocket();
     };
-  }, [addMessage, applyRemoteCodeUpdate, currentSessionId, setMessages, userId]);
+  }, [addMessage, applyRemoteCodeUpdate, currentSessionId, setExecutionResult, setMessages, userId]);
 }

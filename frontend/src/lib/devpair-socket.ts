@@ -17,6 +17,17 @@ interface CodeUpdatePayload {
   language: string;
 }
 
+export interface ExecutionResultPayload {
+  stdout: string;
+  stderr: string;
+  compileOutput: string;
+  status: string;
+  statusCode: number;
+  time: string;
+  memory: string;
+  simulated?: boolean;
+}
+
 interface WebRtcReadyPayload {
   sessionId: string;
   readyUserId: string;
@@ -71,6 +82,9 @@ interface ClientToServerEvents {
   'code-change': (
     payload: { sessionId: string; code: string; language: string },
   ) => void;
+  'execution-result': (
+    payload: { sessionId: string; result: ExecutionResultPayload },
+  ) => void;
   'webrtc-ready': (payload: { sessionId: string }) => void;
   'webrtc-offer': (
     payload: { sessionId: string; offer: WebRtcSessionDescriptionPayload },
@@ -88,6 +102,10 @@ interface ClientToServerEvents {
 interface ServerToClientEvents {
   'receive-message': (message: ApiMessagePayload) => void;
   'code-update': (payload: CodeUpdatePayload) => void;
+  'execution-result': (payload: {
+    sessionId: string;
+    result: ExecutionResultPayload;
+  }) => void;
   'webrtc-ready': (payload: WebRtcReadyPayload) => void;
   'webrtc-offer': (
     payload: { sessionId: string; offer: WebRtcSessionDescriptionPayload },
@@ -273,6 +291,22 @@ export function emitRealtimeCodeChange(sessionId: string, code: string, language
     sessionId,
     code,
     language,
+  });
+}
+
+export function emitRealtimeExecutionResult(
+  sessionId: string,
+  result: ExecutionResultPayload,
+) {
+  const socket = connectDevPairSocket();
+
+  if (!socket) {
+    return;
+  }
+
+  socket.emit('execution-result', {
+    sessionId,
+    result,
   });
 }
 

@@ -3,6 +3,11 @@ import { SessionStatus } from "@prisma/client";
 import { db } from "../lib/db.ts";
 import { AppError } from "../lib/errors.ts";
 import {
+  getDefaultSessionCode,
+  supportedLanguages,
+  type SupportedLanguage,
+} from "../lib/languages.ts";
+import {
   serializeMessage,
   serializeSession,
   type ApiMessage,
@@ -18,10 +23,7 @@ const createSessionSchema = z.object({
   code: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   status: z.enum(["active", "scheduled", "ended"]).optional().default("active"),
-  language: z
-    .enum(["javascript", "typescript", "python", "java", "cpp"])
-    .optional()
-    .default("javascript"),
+  language: z.enum(supportedLanguages).optional(),
 });
 
 const joinSessionSchema = z.object({
@@ -46,6 +48,18 @@ const messageSchema = z.object({
   content: z.string().trim().min(1, "Message content is required").max(5000),
 });
 
+function resolveInitialLanguage(inputLanguage?: string | null, preferredLanguage?: string | null) {
+  if (inputLanguage && supportedLanguages.includes(inputLanguage as SupportedLanguage)) {
+    return inputLanguage as SupportedLanguage;
+  }
+
+  if (preferredLanguage && supportedLanguages.includes(preferredLanguage as SupportedLanguage)) {
+    return preferredLanguage as SupportedLanguage;
+  }
+
+  return "javascript" satisfies SupportedLanguage;
+}
+
 async function activateSessionIfDue<T extends { id: string; status: SessionStatus; createdAt: Date }>(
   session: T,
 ) {
@@ -64,6 +78,7 @@ async function activateSessionIfDue<T extends { id: string; status: SessionStatu
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 }
@@ -89,6 +104,7 @@ async function ensureParticipantAccess(sessionId: string, userId: string) {
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -112,6 +128,7 @@ async function findSessionById(sessionId: string) {
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 }
@@ -122,6 +139,7 @@ async function findSessionByInviteCode(inviteCode: string) {
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 }
@@ -206,6 +224,8 @@ export async function createSessionForUser(user: ApiUser, input: unknown) {
   const data = createSessionSchema.parse(input);
   const providedStudentId =
     data.studentId && data.studentId !== "pending" ? data.studentId : null;
+  const initialLanguage = resolveInitialLanguage(data.language, user.defaultLanguage);
+  const initialCode = data.code ?? getDefaultSessionCode(initialLanguage);
 
   if (providedStudentId) {
     const assignedStudent = await db.user.findUnique({
@@ -223,14 +243,21 @@ export async function createSessionForUser(user: ApiUser, input: unknown) {
       mentorId: user.id,
       studentId: providedStudentId,
       inviteCode: await generateUniqueInviteCode(),
-      code: data.code ?? null,
-      language: data.language,
+      code: initialCode,
+      language: initialLanguage,
       status: data.status.toUpperCase() as SessionStatus,
+      drafts: {
+        create: {
+          language: initialLanguage,
+          code: initialCode,
+        },
+      },
       ...(data.createdAt ? { createdAt: data.createdAt } : {}),
     },
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -270,6 +297,7 @@ export async function updateSessionForUser(
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -296,6 +324,7 @@ export async function updateSessionForUser(
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -328,6 +357,7 @@ async function joinSessionRecordForUser(
             include: {
               mentor: true,
               student: true,
+              drafts: true,
             },
           });
 
@@ -347,6 +377,7 @@ async function joinSessionRecordForUser(
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -382,6 +413,7 @@ export async function endSessionForUser(sessionId: string, user: ApiUser) {
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -402,6 +434,7 @@ export async function endSessionForUser(sessionId: string, user: ApiUser) {
     include: {
       mentor: true,
       student: true,
+      drafts: true,
     },
   });
 
@@ -449,4 +482,39 @@ export async function createMessageForUser(
 export async function ensureSocketSessionAccess(sessionId: string, user: ApiUser): Promise<ApiSession> {
   const session = await ensureParticipantAccess(sessionId, user.id);
   return serializeSession(session);
+}
+
+export async function upsertSessionDraftForUser(
+  sessionId: string,
+  user: ApiUser,
+  language: SupportedLanguage,
+  code: string,
+) {
+  await ensureParticipantAccess(sessionId, user.id);
+
+  await db.$transaction([
+    db.sessionDraft.upsert({
+      where: {
+        sessionId_language: {
+          sessionId,
+          language,
+        },
+      },
+      create: {
+        sessionId,
+        language,
+        code,
+      },
+      update: {
+        code,
+      },
+    }),
+    db.session.update({
+      where: { id: sessionId },
+      data: {
+        code,
+        language,
+      },
+    }),
+  ]);
 }

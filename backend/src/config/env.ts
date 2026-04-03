@@ -9,6 +9,10 @@ const envSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
   FIREBASE_CLIENT_EMAIL: z.string().trim().email().optional(),
   FIREBASE_PRIVATE_KEY: z.string().trim().min(1).optional(),
+  JUDGE0_BASE_URL: z.string().trim().url().optional(),
+  JUDGE0_API_KEY: z.string().trim().min(1).optional(),
+  JUDGE0_API_KEY_HEADER: z.string().trim().min(1).optional(),
+  JUDGE0_LANGUAGE_IDS_JSON: z.string().trim().min(1).optional(),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
@@ -27,6 +31,9 @@ if (!parsedEnv.success) {
 export const env = {
   ...parsedEnv.data,
   isProduction: parsedEnv.data.NODE_ENV === "production",
+  judge0BaseUrl: parsedEnv.data.JUDGE0_BASE_URL?.replace(/\/+$/, "") ?? null,
+  judge0ApiKeyHeader:
+    parsedEnv.data.JUDGE0_API_KEY_HEADER?.trim() || "X-Auth-Token",
   allowedCorsOrigins: parsedEnv.data.CORS_ORIGIN.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),

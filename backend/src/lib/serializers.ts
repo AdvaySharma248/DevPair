@@ -2,10 +2,15 @@ import type {
   Message,
   Prisma,
   Session,
+  SessionDraft,
   SessionStatus,
   User,
   UserRole,
 } from "@prisma/client";
+import {
+  supportedLanguages,
+  type SupportedLanguage,
+} from "./languages.ts";
 
 export type ApiUserRole = "mentor" | "student";
 export type ApiSessionStatus = "active" | "scheduled" | "ended";
@@ -33,6 +38,7 @@ export interface ApiSession {
   code?: string | null;
   language?: string | null;
   inviteCode?: string | null;
+  drafts?: Partial<Record<SupportedLanguage, string>> | null;
 }
 
 export interface ApiMessage {
@@ -48,6 +54,7 @@ export type SessionWithParticipants = Prisma.SessionGetPayload<{
   include: {
     mentor: true;
     student: true;
+    drafts: true;
   };
 }>;
 
@@ -56,6 +63,12 @@ export type MessageWithSender = Prisma.MessageGetPayload<{
     sender: true;
   };
 }>;
+
+type SessionWithOptionalRelations = Session & {
+  mentor?: User;
+  student?: User | null;
+  drafts?: SessionDraft[];
+};
 
 function normalizeRole(role: UserRole): ApiUserRole {
   return role.toLowerCase() as ApiUserRole;
@@ -78,11 +91,31 @@ export function serializeUser(user: User): ApiUser {
   };
 }
 
-export function serializeSession(session: SessionWithParticipants | Session): ApiSession {
+function serializeDrafts(drafts?: SessionDraft[]) {
+  if (!drafts?.length) {
+    return null;
+  }
+
+  return drafts.reduce<Partial<Record<SupportedLanguage, string>>>((accumulator, draft) => {
+    if (
+      supportedLanguages.includes(draft.language as SupportedLanguage)
+    ) {
+      accumulator[draft.language as SupportedLanguage] = draft.code;
+    }
+
+    return accumulator;
+  }, {});
+}
+
+export function serializeSession(session: SessionWithParticipants | SessionWithOptionalRelations | Session): ApiSession {
   const mentorName =
     "mentor" in session && session.mentor ? session.mentor.name : "Mentor";
   const studentName =
     "student" in session && session.student ? session.student.name : null;
+  const drafts =
+    "drafts" in session && Array.isArray(session.drafts)
+      ? serializeDrafts(session.drafts)
+      : null;
 
   return {
     id: session.id,
@@ -96,6 +129,7 @@ export function serializeSession(session: SessionWithParticipants | Session): Ap
     code: session.code ?? null,
     language: session.language ?? null,
     inviteCode: "inviteCode" in session ? session.inviteCode ?? null : null,
+    drafts,
   };
 }
 

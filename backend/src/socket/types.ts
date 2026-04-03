@@ -21,6 +21,17 @@ export interface CodeUpdatePayload {
   language: string;
 }
 
+export interface ExecutionResultPayload {
+  stdout: string;
+  stderr: string;
+  compileOutput: string;
+  status: string;
+  statusCode: number;
+  time: string;
+  memory: string;
+  simulated?: boolean;
+}
+
 export interface WebRtcReadyPayload {
   sessionId: string;
   readyUserId: string;
@@ -70,6 +81,12 @@ export interface ClientToServerEvents {
   "code-change": (
     payload: { sessionId?: string; code?: string; language?: string },
   ) => void;
+  "execution-result": (
+    payload: {
+      sessionId?: string;
+      result?: ExecutionResultPayload;
+    },
+  ) => void;
   "webrtc-ready": (payload: { sessionId?: string }) => void;
   "webrtc-offer": (
     payload: {
@@ -96,6 +113,10 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   "receive-message": (message: ApiMessage) => void;
   "code-update": (payload: CodeUpdatePayload) => void;
+  "execution-result": (payload: {
+    sessionId: string;
+    result: ExecutionResultPayload;
+  }) => void;
   "webrtc-ready": (payload: WebRtcReadyPayload) => void;
   "webrtc-offer": (
     payload: {

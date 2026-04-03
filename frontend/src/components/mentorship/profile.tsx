@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -235,7 +236,8 @@ function ProfileSummary() {
 
 // Sessions Tab Content
 function SessionsTab() {
-  const { sessions, user, joinSession } = useMentorshipStore();
+  const { sessions, user } = useMentorshipStore();
+  const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'active' | 'scheduled' | 'ended'>('all');
 
   const isMentor = user?.role === 'mentor';
@@ -341,7 +343,7 @@ function SessionsTab() {
                       <Button
                         size="sm"
                         className="h-8 shrink-0 px-3 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90"
-                        onClick={() => joinSession(session)}
+                        onClick={() => router.push(`/session/${session.id}`)}
                       >
                         <Play className="h-3 w-3 mr-1.5" />
                         Join
